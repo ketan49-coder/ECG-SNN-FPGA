@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -28,6 +29,11 @@ wheels/
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Environment
@@ -41,3 +47,30 @@ ENV/
 
 # Logs
 *.log
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Vivado / Xilinx
+*.jou
+*.log
+*.pb
+*.wdb
+*.wcfg
+*.str
+*.zip
+*.tar.gz
+*.dmp
+.Xil/
+project_*/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.sim_*/
+*.hbs
+*.xpr
