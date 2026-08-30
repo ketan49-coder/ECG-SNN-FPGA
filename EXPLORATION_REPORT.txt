@@ -1,0 +1,368 @@
+MIT-BIH ARRHYTHMIA DATABASE - DATA EXPLORATION REPORT
+========================================================
+
+Date: 2026-08-28
+Location: C:\Users\rikhi\Downloads\SNN_ECG\mit-bih-arrhythmia-database-1.0.0\mit-bih-arrhythmia-database-1.0.0\
+
+========================================================
+1. DATASET OVERVIEW
+========================================================
+
+Source: MIT-BIH Arrhythmia Database (PhysioNet)
+Version: 1.0.0
+Format: WFDB (WaveForm DataBase) - .dat, .hea, .atr files
+
+Main Database:
+  - 48 records (100-234, excluding some numbers)
+  - Each record: ~30.1 minutes (650,000 samples at 360 Hz)
+  - Two leads per record (from MLII, V1, V2, V4, V5)
+  - Total duration: ~24.1 hours
+  - Total annotated beats: 109,494
+
+Supplementary Database (x_mitdb):
+  - 23 records (x_108 through x_234)
+  - Each record: ~10 minutes (216,000 samples at 360 Hz)
+  - Two leads: MLII + V1
+  - Total duration: ~13.8 hours
+
+File Structure:
+  *.dat  - Binary signal data (212 format, 16-bit)
+  *.hea  - Header file (metadata, lead info)
+  *.atr  - Reference annotations (beat + rhythm)
+  *.xws  - Waveform server config
+  RECORDS - List of record names
+  ANNOTATORS - Annotation file descriptions
+  SHA256SUMS.txt - Checksums
+  mitdbdir/ - Documentation files
+  x_mitdb/ - Supplementary records
+
+========================================================
+2. SIGNAL CHARACTERISTICS
+========================================================
+
+Sampling Rate: 360 Hz (all records)
+Signal Units: mV (millivolts)
+ADC Gain: 200
+Baseline: 1024
+Format: 212 (16-bit signed)
+
+Leads Available:
+  - MLII (Modified Lead II): 47/48 records
+  - V1: 28/48 records
+  - V2: 5/48 records (102, 103, 104, 117, 123)
+  - V4: 1/48 records (124)
+  - V5: 8/48 records (100, 102, 103, 104, 114, 123)
+
+Standard Configuration: MLII + V1 (32 records)
+
+Signal Statistics (MLII lead, varies by record):
+  - Mean: -0.2 to -0.8 mV
+  - Std Dev: 0.15 to 0.86 mV
+  - Range: 1.3 to 10.2 mV
+  - Records 102, 103, 107, 108 show highest variability
+
+========================================================
+3. ANNOTATION ANALYSIS
+========================================================
+
+Annotation Types Found (all records):
+  N  - Normal beat
+  L  - Left bundle branch block beat
+  R  - Right bundle branch block beat
+  e  - Atrial escape beat
+  j  - Nodal (junctional) escape beat
+  A  - Atrial premature beat
+  a  - Aberrated atrial premature beat
+  J  - Nodal (junctional) premature beat
+  S  - Supraventricular premature beat
+  V  - Premature ventricular contraction
+  E  - Ventricular escape beat
+  F  - Fusion of ventricular and normal beat
+  /  - Paced beat
+  f  - Fusion of paced and normal beat
+  Q  - Unclassifiable beat
+  +  - Rhythm change
+  ~  - Signal quality change
+  |  - Isolated QRS-like artifact
+  [  - Start of ventricular flutter/fibrillation
+  ]  - End of ventricular flutter/fibrillation
+  !  - Ventricular flutter wave
+  "  - Non-conducted P-wave
+  x  - Non-conducted P-wave (alternative)
+
+AAMI CLASS MAPPING:
+  Class N (Normal): N, L, R, e, j
+  Class S (SVEB): A, a, J, S
+  Class V (VEB): V, E
+  Class F (Fusion): F
+  Class Q (Unknown): /, f, Q
+  Non-beat: +, ~, |, [, ], !, ", x
+
+========================================================
+4. AAMI CLASS DISTRIBUTION (MAIN DATABASE - 48 RECORDS)
+========================================================
+
+Total Annotations: 112,647 (including non-beat)
+Total Beats (excl. non-beat): 109,494
+
+| Class | Symbols | Count | Percentage | Description |
+|-------|---------|-------|------------|-------------|
+| N | N,L,R,e,j | 90,631 | 80.5% | Normal beats |
+| Q | /,f,Q | 8,043 | 7.1% | Unknown/Paced |
+| V | V,E | 7,236 | 6.4% | Ventricular ectopic |
+| S | A,a,J,S | 2,781 | 2.5% | Supraventricular ectopic |
+| F | F | 803 | 0.7% | Fusion beats |
+| Non-beat | +,~,|,[,],!," ,x | 3,153 | 2.8% | Non-beat annotations |
+
+KEY OBSERVATIONS:
+  - Extreme class imbalance: Normal beats = 80.5%
+  - VEB class (7,236) sufficient for training
+  - SVEB class (2,781) challenging - may need augmentation
+  - Q class (8,043) large - mostly paced beats in records 102, 104, 107, 217
+  - Non-beat annotations: rhythm changes, signal quality, artifacts
+
+========================================================
+5. PER-RECORD ARRHYTHMIA CONTENT
+========================================================
+
+TOP 5 RECORDS BY VEB COUNT:
+  1. Record 208: 992 VEBs (33.6%) - MLII + V1
+  2. Record 233: 831 VEBs (27.0%) - MLII + V1
+  3. Record 200: 826 VEBs (31.8%) - MLII + V1
+  4. Record 106: 520 VEBs (25.7%) - MLII + V1
+  5. Record 223: 473 VEBs (18.2%) - MLII + V1
+
+TOP 5 RECORDS BY SVEB COUNT:
+  1. Record 232: 1,382 SVEBs (77.6%) - MLII + V1 (ATRIAL FIBRILLATION)
+  2. Record 209: 383 SVEBs (12.7%) - MLII + V1
+  3. Record 222: 209 SVEBs (8.4%) - MLII + V1
+  4. Record 201: 128 SVEBs (6.5%) - MLII + V1
+  5. Record 207: 107 SVEBs (5.8%) - MLII + V1
+
+RECORDS WITH >10% VEBs:
+  208, 233, 200, 106, 223, 231, 214, 228, 217, 221, 203, 213, 124, 210, 119, 116, 105, 109
+
+RECORDS DOMINATED BY SVEB (>50%):
+  232 (77.6% - Atrial Fibrillation)
+
+RECORDS WITH HIGH PACED/UNKNOWN BEATS (Q class):
+  102 (95.3%), 104 (92.6%), 107 (97.2%), 217 (81.6%)
+
+========================================================
+6. RR INTERVAL ANALYSIS
+========================================================
+
+Analyzed 47/48 records (using N, L, R, e, j beats only)
+
+Overall Statistics:
+  - Mean RR Interval: ~800-1200 ms (highly variable)
+  - Mean Heart Rate: 45-100 bpm (arrhythmia-dependent)
+  - RR Variability (CV): Highly variable across records
+  - Records with arrhythmias show significantly higher CV
+
+Normal Records (e.g., 100, 101, 112, 115):
+  - Mean RR: ~800-900 ms (67-75 bpm)
+  - Low CV: <5%
+
+Arrhythmia Records (e.g., 208, 233, 200):
+  - Mean RR: Highly variable
+  - High CV: >20% (indicating irregular rhythm)
+
+========================================================
+7. SUPPLEMENTARY DATABASE (x_mitdb)
+========================================================
+
+23 records matching main database record numbers:
+  x_108, x_109, x_111, x_112, x_113, x_114, x_115, x_116, x_117,
+  x_121, x_122, x_123, x_124, x_220, x_221, x_222, x_223, x_228,
+  x_230, x_231, x_232, x_233, x_234
+
+Characteristics:
+  - Duration: 10 minutes each (216,000 samples)
+  - Leads: MLII + V1
+  - Sampling: 360 Hz
+  - Additional annotations for specific records
+  - Useful for extended training data
+
+Example - x_108:
+  - 582 annotations
+  - Symbols: +, A, F, N, V, x, |, ~
+  - Contains VEBs and SVEBs
+
+========================================================
+8. EXPLORATION ACTIVITIES PERFORMED
+========================================================
+
+A. Data Loading & Inspection
+   - Verified WFDB format readability with wfdb library (v4.3.1)
+   - Inspected header files (.hea) for metadata
+   - Checked RECORDS, ANNOTATORS files
+   - Explored directory structure
+
+B. Annotation Analysis
+   - Parsed all 48 records' .atr annotation files
+   - Mapped raw symbols to AAMI classes
+   - Computed per-record and overall class distributions
+   - Identified class imbalance and record-level variations
+   - Saved: aami_distribution.json
+
+C. Signal Analysis
+   - Loaded signal data (.dat) for all records
+   - Computed statistics: mean, std, min, max, range per lead
+   - Analyzed lead configurations across records
+   - Saved: signal_stats.csv
+
+D. RR Interval Analysis
+   - Extracted R-peak locations from normal beats
+   - Computed RR intervals in milliseconds
+   - Calculated heart rate, variability (CV), min/max
+   - Saved: rr_intervals.csv
+
+E. Beat Morphology Extraction
+   - Extracted 240ms windows around R-peaks (90ms pre, 150ms post)
+   - Computed average beat morphology per class per record
+   - Compared Normal vs VEB vs SVEB across records
+   - Analyzed records 100, 105, 200 (diverse beat types)
+
+F. Visualization Creation (11 plots)
+   Using matplotlib with dataviz skill color palette:
+   1. dashboard.png - 12-panel comprehensive overview
+   2. aami_distribution.png - Overall class bar chart
+   3. aami_pie.png - Main classes pie chart
+   4. per_record_aami.png - Stacked bar per record
+   5. signal_samples.png - 8 records × 5s waveforms + annotations
+   6. beat_morphology.png - Average beats (3×3 grid)
+   7. beat_comparison.png - Normal vs VEB overlay
+   8. signal_heatmap.png - Mean/Std/Range heatmaps
+   9. rr_analysis.png - HR & RR variability (4 panels)
+  10. duration_vs_beats.png - Duration vs beat count scatter
+
+G. Documentation
+   - EXPLORATION_SUMMARY.md - Full markdown report
+   - create_dashboard.py - Reproducible Python script
+   - This report (EXPLORATION_REPORT.txt)
+
+========================================================
+9. GENERATED FILES INVENTORY
+========================================================
+
+Data Files:
+  aami_distribution.json    6.8 KB  - Complete AAMI counts per record
+  signal_stats.csv          6.7 KB  - Signal stats per record/lead
+  rr_intervals.csv          4.5 KB  - RR interval stats per record
+
+Visualization Files:
+  dashboard.png            361 KB  - 12-panel comprehensive dashboard
+  aami_distribution.png     58 KB  - Class distribution bar chart
+  aami_pie.png              63 KB  - Main classes pie chart
+  per_record_aami.png      142 KB  - Stacked bars per record
+  signal_samples.png       369 KB  - 8 records × 5s waveforms
+  beat_morphology.png      386 KB  - Average beat morphologies
+  beat_comparison.png      142 KB  - Normal vs VEB comparison
+  signal_heatmap.png       141 KB  - Signal stats heatmaps
+  rr_analysis.png          172 KB  - RR interval analysis
+  duration_vs_beats.png     64 KB  - Duration vs beats scatter
+
+Code & Documentation:
+  create_dashboard.py       - Reproducible visualization script
+  EXPLORATION_SUMMARY.md    - Full markdown report
+  EXPLORATION_REPORT.txt    - This file
+
+========================================================
+10. RECOMMENDATIONS FOR MACHINE LEARNING
+========================================================
+
+A. Train/Test Split Strategy
+   USE RECORD-WISE SPLITS (not beat-wise) to avoid data leakage
+
+   Standard AAMI Split (DS1/DS2):
+
+   DS1 (Training): 101, 106, 108, 109, 112, 114, 115, 116, 118, 119,
+                   122, 124, 201, 203, 205, 207, 208, 209, 215, 220,
+                   223, 230 (22 records)
+
+   DS2 (Testing): 100, 103, 105, 111, 113, 117, 121, 123, 200, 202,
+                  210, 212, 213, 214, 219, 221, 222, 228, 231, 232,
+                  233, 234 (22 records)
+
+B. Preprocessing Pipeline
+   1. Bandpass filter: 0.5-40 Hz (Butterworth 2nd-4th order)
+   2. Normalization: Per-record z-score or global [-1,1]
+   3. Beat segmentation: 240ms window centered on R-peak
+      (90ms pre-R, 150ms post-R at 360 Hz = 240 samples)
+   4. Baseline correction: Remove wander if needed
+   5. Quality check: Exclude noisy segments
+
+C. Class Balancing Strategies
+   - VEB (7,236): Adequate, consider slight undersampling
+   - SVEB (2,781): Deficient - use SMOTE, oversampling, or weighted loss
+   - Q/Paced (8,043): Consider excluding or separate class
+   - Fusion (803): Very few - may merge or exclude
+   - Non-beat: Exclude from beat classification
+
+D. Suggested Class Mapping for 4-Class Problem
+   Class 0 (Normal): N, L, R, e, j
+   Class 1 (SVEB): A, a, J, S
+   Class 2 (VEB): V, E
+   Class 3 (Fusion): F
+   (Exclude: /, f, Q, +, ~, |, [, ], !, ", x)
+
+E. Model Architecture Considerations
+   - Input: Single lead (MLII) or dual lead (MLII + V1)
+   - 1D CNN: Effective for raw waveform input
+   - RNN/LSTM: Good for temporal dependencies
+   - Transformer: State-of-the-art for ECG classification
+   - Ensemble: Combine multiple architectures
+
+F. Evaluation Metrics
+   - Per-class: Precision, Recall, F1-score
+   - Overall: Accuracy, Macro-F1 (important for imbalance)
+   - Confusion matrix analysis
+   - Per-record performance (clinical relevance)
+
+G. Data Augmentation
+   - Time warping
+   - Amplitude scaling
+   - Gaussian noise addition
+   - Random cropping
+   - Mixup between same-class beats
+
+========================================================
+11. TOOLS & ENVIRONMENT
+========================================================
+
+Python Environment:
+  - Python 3.12
+  - wfdb 4.3.1 (PhysioNet WFDB Python package)
+  - numpy, pandas, matplotlib, seaborn
+  - dataviz skill color palette (brand-neutral, CVD-safe)
+
+Key Commands Used:
+  - wfdb.rdrecord() - Read signal data
+  - wfdb.rdann() - Read annotations
+  - numpy for numerical computation
+  - matplotlib for visualization
+  - pandas for data manipulation
+
+========================================================
+12. KNOWN LIMITATIONS & CAVEATS
+========================================================
+
+1. Class Imbalance: Extreme (80.5% Normal) - requires careful handling
+2. Paced Beats: Records 102, 104, 107, 217 dominated by paced/unknown beats
+3. Lead Variability: Different lead combinations across records
+4. Annotation Quality: Some records have fewer annotations (e.g., 117: 1,539 beats)
+5. Supplementary Data: x_mitdb has different duration (10 vs 30 min)
+6. Non-beat Annotations: 2.8% - need exclusion for beat classification
+7. Atrial Fibrillation: Record 232 is 77.6% SVEB - special case
+8. RR Variability: High in arrhythmia records - affects segmentation
+
+========================================================
+END OF REPORT
+========================================================
+
+This exploration provides a complete characterization of the MIT-BIH
+Arrhythmia Database suitable for designing ECG classification experiments.
+
+All generated files are in:
+C:\Users\rikhi\Downloads\SNN_ECG\mit-bih-arrhythmia-database-1.0.0\mit-bih-arrhythmia-database-1.0.0\
