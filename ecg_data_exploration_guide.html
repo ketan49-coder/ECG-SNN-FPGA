@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ECG Data Exploration - Deep Study Guide</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 12pt;
+    line-height: 1.7;
+    color: #1a1a2e;
+    margin: 0;
+    padding: 30px 50px;
+    background: #ffffff;
+  }
+  h1 {
+    font-size: 22pt;
+    color: #0d3b66;
+    text-align: center;
+    border-bottom: 3px solid #0d3b66;
+    padding-bottom: 10px;
+    margin-bottom: 5px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #555;
+    font-size: 11pt;
+    margin-bottom: 30px;
+  }
+  h2 {
+    font-size: 16pt;
+    color: #1565c0;
+    border-left: 5px solid #1565c0;
+    padding-left: 12px;
+    margin-top: 40px;
+    page-break-before: always;
+  }
+  h2:first-of-type {
+    page-break-before: avoid;
+  }
+  h3 {
+    font-size: 13pt;
+    color: #c62828;
+    margin-top: 20px;
+    margin-bottom: 5px;
+  }
+  .img-container {
+    text-align: center;
+    margin: 20px auto;
+    page-break-inside: avoid;
+  }
+  .img-container img {
+    width: 680px;
+    max-width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+  }
+  .caption {
+    font-style: italic;
+    font-size: 10pt;
+    color: #555;
+    margin-top: 6px;
+  }
+  .insight-box {
+    background: #e3f2fd;
+    border-left: 5px solid #1565c0;
+    padding: 12px 16px;
+    margin: 15px 0;
+    border-radius: 4px;
+    page-break-inside: avoid;
+  }
+  .warning-box {
+    background: #fff8e1;
+    border-left: 5px solid #f9a825;
+    padding: 12px 16px;
+    margin: 15px 0;
+    border-radius: 4px;
+    page-break-inside: avoid;
+  }
+  .code-box {
+    background: #263238;
+    color: #80cbc4;
+    font-family: 'Courier New', monospace;
+    font-size: 10pt;
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 12px 0;
+    page-break-inside: avoid;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+    font-size: 11pt;
+  }
+  th {
+    background: #1565c0;
+    color: white;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid #ddd;
+  }
+  tr:nth-child(even) { background: #f5f5f5; }
+  ul, ol { margin: 8px 0; padding-left: 24px; }
+  li { margin-bottom: 5px; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<h1>ECG Data Exploration — Deep Study Guide</h1>
+<div class="subtitle">
+  MIT-BIH Arrhythmia Database Analysis | ECG-SNN-FPGA Project<br>
+  Study this document to understand every visualization before the next session.
+</div>
+
+<!-- ==================== FIGURE 1 ==================== -->
+<h2>Figure 1 — Raw ECG Signal Samples with Beat Annotations</h2>
+
+<div class="img-container">
+  <img src="signal_samples.png" alt="Raw ECG Signals">
+  <div class="caption">Figure 1: First 5 seconds of ECG recordings from 8 different patient records. Blue dots = Normal beats. Pink/Red dots = Arrhythmic beats (VEB or SVEB).</div>
+</div>
+
+<h3>What You Are Looking At</h3>
+<p>Each small subplot in this figure shows the raw electrical signal recorded from one patient's heart. The X-axis is time in seconds, and the Y-axis is the signal amplitude in millivolts (mV). The sharp, tall spikes you see are called <strong>R-peaks</strong> — the most powerful electrical event in a heartbeat, representing the main contraction of the heart's ventricles.</p>
+
+<h3>Understanding the Coloured Dots</h3>
+<ul>
+  <li><strong>Blue dots:</strong> These are <strong>Normal (N) beats</strong>. The heart fired at the correct time and with the correct shape.</li>
+  <li><strong>Pink/Red dots:</strong> These are <strong>arrhythmic beats</strong> — either Ventricular Ectopic Beats (VEB) or Supraventricular Ectopic Beats (SVEB). Notice how they appear in unexpected positions or have a different shape.</li>
+</ul>
+
+<h3>Deep Insight — Why Records Look So Different</h3>
+<p>Look at Record 100 vs Record 107. Record 100 has clean, consistent, tall spikes at regular intervals. Record 107 has massive, chaotic, inverted waveforms. Both are the same type of ECG measurement (MLII lead), but they look completely different because:</p>
+<ol>
+  <li><strong>Different patients, different heart anatomy</strong> — The position of the heart in the chest and the thickness of the chest wall change the amplitude dramatically.</li>
+  <li><strong>Different pathologies</strong> — Record 107 is a patient with a very serious arrhythmia. The waveforms are wide and inverted because the electrical signal is traveling through the heart muscle in the wrong direction (a hallmark of Ventricular Tachycardia).</li>
+  <li><strong>Different leads</strong> — Some records use the MLII lead, others use V5 lead. Each lead measures the heart's electricity from a different angle, giving a completely different-looking wave.</li>
+</ol>
+
+<div class="insight-box">
+  <strong>Engineering Takeaway for our SNN:</strong> Because every patient's ECG looks so different in absolute amplitude, we CANNOT just feed the raw millivolt values into our neural network. If we did, the network trained on Patient 100 (max 0.8 mV) would completely fail on Patient 107 (max 2.0 mV). This is exactly why our <code>preprocess.py</code> script performs <strong>per-window Min-Max normalization</strong> — every single heartbeat window is independently scaled to the range [0, 1] before it ever reaches our SNN.
+</div>
+
+<h3>What is the MLII Lead?</h3>
+<p>The MIT-BIH database records from a "Modified Limb Lead II" (MLII). Imagine placing one electrode on your right shoulder and another on your left hip. The electrodes measure the voltage difference between these two points as the heart beats. This specific angle is the most popular in clinical settings because it gives the clearest view of the P-wave (atrial contraction) and the QRS complex (ventricular contraction) — both of which are critical for arrhythmia detection.</p>
+
+<!-- ==================== FIGURE 2 ==================== -->
+<h2>Figure 2 — Signal Statistics Across Records and Leads (Heatmaps)</h2>
+
+<div class="img-container">
+  <img src="signal_heatmap.png" alt="Signal Statistics Heatmap">
+  <div class="caption">Figure 2: Three heatmaps showing Mean Signal, Standard Deviation, and Signal Range across all 48 patient records and their available ECG leads.</div>
+</div>
+
+<h3>What You Are Looking At</h3>
+<p>This figure contains three heatmaps placed side by side. Each row represents one patient record (100 through 234), and each column represents an ECG lead (MLII, V1, V2, V4, V5). The colour of each cell tells you a statistical property of that patient's signal on that specific lead. White cells indicate that the lead was not recorded for that patient.</p>
+
+<h3>Heatmap 1 — Mean Signal (mV)</h3>
+<p>This shows the average voltage of the entire recording. A dark red cell means the signal has a positive average (the baseline floats above zero). A dark blue cell means the signal has a negative average (the baseline sits below zero).</p>
+<div class="warning-box">
+  <strong>Key Observation:</strong> Notice how some patients (like 100-103) show deep red (positive mean around +0.5 mV or higher) while others (like 116-117) show deep blue (very negative mean). This "baseline offset" is called <strong>DC Offset</strong> or <strong>Baseline Wander</strong>. It is caused by skin-electrode interface impedance, breathing movements, and patient movement. Our normalization handles this automatically.
+</div>
+
+<h3>Heatmap 2 — Standard Deviation (mV)</h3>
+<p>This shows how much the signal swings around its average. A high standard deviation (yellow/bright) means the patient has very large, dramatic ECG waveforms. A low standard deviation (dark purple) means the signal is relatively flat and quiet.</p>
+<p>You can immediately spot the patients with serious arrhythmias — they have the brightest cells because their hearts are generating erratic, large electrical events, causing the signal to swing wildly in both directions.</p>
+
+<h3>Heatmap 3 — Signal Range (mV)</h3>
+<p>This shows the total spread from the lowest point to the highest point in the entire recording. Again, bright yellow cells (like Record 116, V1 lead showing ~10 mV range!) are patients with extremely abnormal heart rhythms.</p>
+
+<div class="insight-box">
+  <strong>Engineering Takeaway:</strong> All three heatmaps together confirm one critical fact — the raw ECG signals are wildly inconsistent across patients. There is no universal "Normal ECG amplitude." This completely validates our design choice of using a <strong>Rate Encoder (LFSR + Comparator)</strong> as the first stage of our FPGA. The rate encoder converts the normalized [0,1] amplitude into a spike frequency, abstracting away all of these amplitude differences at the hardware level.
+</div>
+
+<!-- ==================== FIGURE 3 ==================== -->
+<h2>Figure 3 — Heart Rate and RR Interval Analysis</h2>
+
+<div class="img-container">
+  <img src="rr_analysis.png" alt="Heart Rate Analysis">
+  <div class="caption">Figure 3: Four charts analyzing the timing between heartbeats (RR intervals) across all 48 patient records — a key indicator of arrhythmia severity.</div>
+</div>
+
+<h3>What is the RR Interval? (The Foundation of This Figure)</h3>
+<p>The <strong>RR Interval</strong> is simply the time (in milliseconds) between two consecutive R-peaks. In a healthy adult at rest, this gap is approximately 800ms to 1000ms (which corresponds to a heart rate of 60-75 beats per minute). The entire field of Heart Rate Variability (HRV) analysis is built around measuring exactly how these gaps change over time.</p>
+
+<h3>Top-Left — Mean RR Interval per Record</h3>
+<p>This bar chart shows the <em>average</em> time gap between heartbeats for each patient. Most patients cluster around 600-900ms. However, notice the catastrophic outlier at <strong>Record 100</strong>, which appears to have a Mean RR of over 16,000ms! This is almost certainly not a real heartbeat gap — it is caused by the very first annotation in the record including a long "non-beat" period at the beginning of the recording (before the patient is connected). This is a classic <strong>data artifact</strong> that a real pre-processing pipeline should filter out.</p>
+
+<h3>Top-Right — Mean Heart Rate per Record</h3>
+<p>Heart Rate (HR) in beats-per-minute (BPM) is simply calculated as <code>60,000 / Mean_RR_ms</code>. Most patients sit comfortably in the 50-80 BPM range (normal resting heart rate). You can see some patients pushing past 100 BPM — this is called <strong>Tachycardia</strong> (fast heart). The "missing" bars around records 130-190 are simply because those record numbers do not exist in the MIT-BIH database.</p>
+
+<h3>Bottom-Left — RR Variability (Coefficient of Variation)</h3>
+<p>This is the most diagnostically important chart in this figure. The <strong>Coefficient of Variation (CV)</strong> measures how inconsistent the heartbeat timing is. A perfectly regular heart would have a CV of 0%. A very irregular heart (like one in Atrial Fibrillation) might have a CV of 30-50%.</p>
+<p>The massive spike at <strong>Record 100</strong> (CV &gt; 900%!) is again that data artifact from the first annotation. But look at Records 200-223 — many of them have CV values of 30-400%. These are the patients with serious arrhythmias where the heart is beating in an extremely chaotic, irregular pattern.</p>
+
+<h3>Bottom-Right — RR Standard Deviation per Record</h3>
+<p>This is a raw version of the same information as the CV chart, but in milliseconds instead of percentages. Record 100 shows a standard deviation of ~150,000ms (again, the artifact), while the pathological records in the 200s show standard deviations of 5,000-20,000ms, confirming their highly irregular rhythm.</p>
+
+<div class="insight-box">
+  <strong>Engineering Takeaway — Future Work for Our System:</strong> Our current SNN hardware completely ignores RR intervals. It only looks at the shape of the individual heartbeat window. However, this figure clearly shows that the <em>timing</em> between beats is just as important as the <em>shape</em> of individual beats for accurate arrhythmia detection. An upgraded version of our FPGA design could include an <strong>RR-interval counter</strong> (simply counting clock cycles between R-peaks and passing that count as an extra input feature). This is a perfect paragraph to write in your "Future Work" section of the final report — and it directly motivates the TEE Defense project we discussed for next semester.
+</div>
+
+<!-- ==================== FIGURE 4 ==================== -->
+<h2>Figure 4 — Comprehensive Exploration Dashboard (12 Panels)</h2>
+
+<div class="img-container">
+  <img src="dashboard.png" alt="Comprehensive Dashboard">
+  <div class="caption">Figure 4: The complete 12-panel data exploration dashboard showing class distribution, per-record statistics, signal properties, and lead breakdown for the entire MIT-BIH Arrhythmia Database.</div>
+</div>
+
+<h3>Panel 1 (Top-Left) — AAMI Class Distribution Bar Chart</h3>
+<p>This is the single most critical chart in the entire data exploration. It shows the total number of heartbeats for each of the 5 AAMI classes across all 48 patient records combined:</p>
+<table>
+  <tr><th>Class</th><th>Label</th><th>Approx. Count</th><th>% of Total</th></tr>
+  <tr><td>Normal</td><td>N</td><td>~90,000</td><td>~71%</td></tr>
+  <tr><td>Ventricular Ectopic</td><td>VEB/V</td><td>~7,000</td><td>~5.5%</td></tr>
+  <tr><td>Supraventricular</td><td>SVEB/S</td><td>~2,700</td><td>~2.1%</td></tr>
+  <tr><td>Fusion</td><td>F</td><td>~800</td><td>~0.6%</td></tr>
+  <tr><td>Unknown</td><td>Q</td><td>~8,000</td><td>~6.3%</td></tr>
+</table>
+<p>This severe imbalance is the <strong>#1 enemy of machine learning accuracy</strong> on this dataset. Without countermeasures, the model learns to just shout "Normal!" for every heartbeat and achieves 71% accuracy while being completely useless clinically (it never detects the dangerous arrhythmias).</p>
+<div class="warning-box">
+  <strong>This is EXACTLY why we made two critical changes to our training pipeline:</strong>
+  <ol>
+    <li><strong>augment_data.py</strong> — We synthetically generate extra VEB, SVEB, and Fusion beats using noise injection and time-shifting to bring the minority classes up in count.</li>
+    <li><strong>class_weights in CrossEntropyLoss</strong> — We mathematically penalize the loss function much more heavily when the model incorrectly classifies a rare VEB or Fusion beat compared to misclassifying a Normal beat.</li>
+  </ol>
+</div>
+
+<h3>Panel 2 (Top-Centre) — Ventricular Ectopic Beats per Record</h3>
+<p>This green bar chart shows how many VEB (Ventricular Ectopic Beats) each patient record contains. Notice it is extremely uneven — some records (like 200 and 203) have over 800-1,000 VEB beats, while most records have very few. This means our training dataset is not just imbalanced between classes, it is also imbalanced between patients. A few "sick" patients dominate the VEB class entirely.</p>
+
+<h3>Panel 3 (Top-Right) — Supraventricular Ectopic Beats per Record</h3>
+<p>Same analysis but for SVEB beats. The dramatic spike at one specific record (reaching 1,400 beats!) means one single patient is responsible for the majority of all SVEB examples in our training set. This is a significant concern — if our model just memorizes the specific waveform patterns of that one patient, it will fail on new patients. This is called <strong>overfitting to a specific patient</strong> and is a known challenge in ECG classification research.</p>
+
+<h3>Panel 4 (Top-Far-Right) — Lead Distribution Pie Chart</h3>
+<p>This shows that 47.9% of all recordings use the MLII lead, while 41.7% use the V1 lead. The remaining leads (V2, V4, V5) make up the rest. Our <code>preprocess.py</code> script always uses <code>channels=[0]</code> which reads the primary lead (MLII where available), so we are working with the most commonly recorded and most clinically validated signal.</p>
+
+<h3>Panels 5 & 6 (Middle Row) — Signal Mean and Std Dev Scatter Plots</h3>
+<p>These scatter plots show the same information as the heatmaps in Figure 2, but coloured by lead type. You can see the MLII lead (blue dots) forms a distinct cluster separate from the V1 lead (orange dots). V1, being placed on the chest directly over the heart, typically shows a much higher standard deviation (greater amplitude swings) than MLII. This is completely expected behaviour and validates that our data was read correctly.</p>
+
+<h3>Panel 7 (Middle-Centre) — Heart Rate Distribution</h3>
+<p>This histogram shows the spread of mean heart rates across all 48 patients. The peak is around 65-70 BPM, which is exactly what you would expect from a clinical dataset of monitored patients resting in a hospital. The distribution tails off towards 100+ BPM for the tachycardic patients.</p>
+
+<h3>Panel 8 (Middle-Right) — RR Variability Distribution</h3>
+<p>Most patients cluster at very low RR variability (0-50%), which means most patients in the database have relatively regular rhythms. The long tail to the right represents the small number of patients with severely irregular rhythms. This confirms that the database is majority "normal-ish" patients with a few very sick outlier patients — directly mirroring the class imbalance we see in Panel 1.</p>
+
+<h3>Panel 9 (Bottom-Left) — Total Annotated Beats per Record</h3>
+<p>This shows that each recording typically contains 2,000-3,200 annotated heartbeats. The recordings are all approximately 30 minutes long at 360 Hz sampling rate, so this range is completely consistent with normal resting heart rates. The relatively consistent bar heights across all records confirms that the MIT-BIH database has good coverage across patients — there isn't one super-long recording dominating the dataset.</p>
+
+<h3>Panel 10 & 11 (Bottom-Centre) — VEB% and SVEB% per Record</h3>
+<p>These charts show, for each patient record, what percentage of their total beats are arrhythmic. Some records have over 30% VEB beats! That means in those patients, nearly 1 in 3 heartbeats is an abnormal Ventricular Ectopic Beat. For a patient, this would be a serious, life-threatening condition requiring urgent medical attention.</p>
+
+<h3>Panel 12 (Bottom-Right) — Record Class Dominance Pie Chart</h3>
+<p>This chart classifies each of the 48 patient records into one of three categories: "Normal Dominant" (71% of records — mostly Normal beats), "High V" (25% of records — dominated by Ventricular beats), and "S-Dominant" (a tiny 4%). This tells us that the MIT-BIH database deliberately includes a mix of normal and arrhythmic patients, which is ideal for training a classifier. However, it also confirms that "High S" patients are very rare and our model will struggle most with the Supraventricular class.</p>
+
+<!-- ==================== FIGURE 5 ==================== -->
+<h2>Figure 5 — Average Beat Morphology by Class and Record</h2>
+
+<div class="img-container">
+  <img src="beat_morphology.png" alt="Average Beat Morphology">
+  <div class="caption">Figure 5: Average waveform shape (morphology) for Normal, VEB, and SVEB beats across three patient records (100, 105, 200). The shaded area shows the standard deviation — how much individual beats vary from the average shape.</div>
+</div>
+
+<h3>What You Are Looking At</h3>
+<p>This is the most directly useful figure for understanding <em>why our SNN can work</em>. Each subplot shows the average shape of heartbeats belonging to one class, calculated from one specific patient record. The solid line is the mean waveform, and the shaded region around it shows ±1 standard deviation — how much individual beats vary around that average shape.</p>
+<p>The X-axis is in milliseconds (ms), centred at 0 where the R-peak occurs. So the leftmost part of the graph shows what happens <em>before</em> the main spike (the P-wave region), and the rightmost part shows what happens <em>after</em> (the T-wave region).</p>
+
+<h3>Column 1 (Blue) — Normal (N) Beat Morphology</h3>
+<p>The Normal beat has a very characteristic shape that appears across all three patients:</p>
+<ul>
+  <li>A small positive bump before the main spike (the <strong>P-wave</strong> — atrial contraction)</li>
+  <li>A sharp, narrow, tall positive spike (the <strong>R-peak</strong> — ventricular contraction)</li>
+  <li>A return to baseline followed by a gentle dome (the <strong>T-wave</strong> — ventricular repolarization)</li>
+</ul>
+<p>The shaded region is very narrow (tight blue band), meaning Normal beats are very consistent and repeatable. This is excellent for our SNN — it means once the network learns the "Normal shape," it will reliably recognize it across many different heartbeats.</p>
+
+<h3>Column 2 (Green) — VEB (Ventricular Ectopic Beat) Morphology</h3>
+<p>This is where things get dramatic and fascinating. The VEB waveform is strikingly different from Normal:</p>
+<ul>
+  <li><strong>No visible P-wave</strong> — The ectopic beat originates in the ventricle itself, bypassing the normal atrial-to-ventricular pathway, so the atria do not contract first.</li>
+  <li><strong>Massively wide QRS complex</strong> — Because the electrical impulse travels through ordinary muscle cells (not the fast-conducting His-Purkinje fibres), the ventricular contraction is slow and spread out, creating a very wide, bizarre-shaped spike.</li>
+  <li><strong>T-wave inverted or in opposite direction</strong> — Notice how in Records 100 and 200, the VEB waveform goes strongly negative (down to -2.0 mV!) after the main event. This is called a <strong>discordant T-wave</strong> and is the hallmark of Ventricular Ectopic origin.</li>
+</ul>
+<div class="insight-box">
+  <strong>This is the KEY REASON our SNN will succeed:</strong> The morphological difference between a Normal beat and a VEB beat is enormous. Look at the Normal (narrow spike at 0ms) vs VEB (wide, massive, inverted complex). Our 32 hidden neurons only need to learn to detect the WIDTH and DIRECTION of the main spike. This is a very achievable pattern recognition task for even a small SNN with just 16 hidden neurons per layer!
+</div>
+
+<h3>Column 3 (Orange/Red) — SVEB (Supraventricular Ectopic Beat) Morphology</h3>
+<p>The SVEB is the most subtle and difficult class to classify. Looking at Record 100 (top-right): the SVEB looks almost identical to a Normal beat! It has the same narrow QRS shape. The main differences are:</p>
+<ul>
+  <li>The P-wave shape before the spike is slightly different (or absent)</li>
+  <li>The overall timing is slightly premature (it arrives slightly earlier than expected in the rhythm)</li>
+  <li>The T-wave may be slightly altered</li>
+</ul>
+<p>Because the SVEB looks so similar to Normal, this is why our SNN will have the hardest time with the Supraventricular class — and why clinical SVEB detection often requires RR interval information in addition to morphology. This directly motivates the "Future Work" section of our report where we propose adding RR-interval inputs to the hardware.</p>
+<p>Notice that Record 105 shows "SVEB (none)" — this particular patient simply had zero SVEB beats in their recording, so no average can be plotted.</p>
+
+<h3>The Shaded Regions — Inter-beat Variability</h3>
+<p>The width of the shaded regions tells you how consistent beats of the same class are within a single patient. Notice that the VEB shaded region (green) is much wider than the Normal shaded region (blue). This means VEB beats are more variable — every VEB looks slightly different from the last one. This is actually expected because VEB beats can originate from different locations in the ventricle, giving each one a slightly different shape. This variability is another reason why we use Data Augmentation in <code>augment_data.py</code> — we deliberately add variation to our synthetic training samples to teach the SNN that VEB beats are not all identical.
+</p>
+
+<!-- ==================== SUMMARY ==================== -->
+<h2>Summary — What We Must Do Based on This Data</h2>
+
+<table>
+  <tr><th>Observation from Data Exploration</th><th>Action We Took in Code</th></tr>
+  <tr><td>71% of data is Normal class (severe imbalance)</td><td>Added <code>class_weights</code> to CrossEntropyLoss in <code>train_snn.py</code></td></tr>
+  <tr><td>Minority classes have very few samples</td><td>Created <code>augment_data.py</code> with 4 augmentation techniques</td></tr>
+  <tr><td>Huge amplitude variation across patients</td><td>Per-window Min-Max normalization in <code>preprocess.py</code></td></tr>
+  <tr><td>VEB has a very wide, distinct QRS shape</td><td>128-sample window captures full morphology perfectly</td></tr>
+  <tr><td>SVEB looks similar to Normal (hard to classify)</td><td>Reported in Future Work — need RR interval features</td></tr>
+  <tr><td>Baseline wander and noise in raw signals</td><td>Augmentation uses baseline_wander() to make model robust</td></tr>
+  <tr><td>SNN was barely learning (26.8% max accuracy)</td><td>Lowered threshold to 0.5, raised learning rate to 5e-3</td></tr>
+</table>
+
+<div class="insight-box">
+  <strong>The Big Picture:</strong> Every decision we made in our Python pipeline was directly motivated by what the data told us. This is what separates an <em>engineering project</em> from a <em>research project</em>. A research project justifies its design choices with data evidence — which is exactly what these five figures give you. When your professor asks "Why did you use class weights?" or "Why did you augment data?", you now have five high-quality plots with deep technical justifications to back up every single decision.
+</div>
+
+</body>
+</html>
