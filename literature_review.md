@@ -114,3 +114,8 @@ This curated list of 20 references is structured exactly how you should present 
 
 ---
 *Note: A1 (Spiker+) and B9 (STDP Wearables) have been explicitly excluded from this list for strategic focus, reserving them for future solo publication work.*
+
+### Spatial-Temporal Attention Aggregator SNN (STAA-SNN)
+*   **Approach:** Merges SNNs with Transformer-like self-attention mechanisms and position encoding to solve spatial-temporal dependencies. Also introduces time-step random dropout as a regularization strategy.
+*   **Performance:** Achieved SOTA on neuromorphic datasets (CIFAR10-DVS: 82.10%) and static datasets (CIFAR-10: 97.14%).
+*   **Relevance to our project:** While the attention mechanisms and position encodings are too hardware-intensive for our multiplier-free Artix-7 constraints, their 'time-step random dropout' is a highly relevant training-side regularization technique we can adopt to improve robustness on noisy ECG signals without adding hardware overhead.
