@@ -120,7 +120,7 @@ This curated list of 20 references is structured exactly how you should present 
 *   **Performance:** Achieved SOTA on neuromorphic datasets (CIFAR10-DVS: 82.10%) and static datasets (CIFAR-10: 97.14%).
 *   **Relevance to our project:** While the attention mechanisms and position encodings are too hardware-intensive for our multiplier-free Artix-7 constraints, their 'time-step random dropout' is a highly relevant training-side regularization technique we can adopt to improve robustness on noisy ECG signals without adding hardware overhead.
 
-### QP-SNN: Hardware-Friendly and Lightweight Spiking Neural Networks
+### QP-SNN: Quantized and Pruned Spiking Neural Networks (Wei et al., ICLR 2025)
 *   **Approach:** Addresses the gap in resource-limited edge deployment by combining uniform quantization and structured pruning. Introduces weight rescaling for better bit-width utilization and a pruning criterion based on spatiotemporal spike activities to remove redundant kernels.
 *   **Performance:** Achieves SOTA efficiency and performance for lightweight SNNs, heavily reducing storage and computational costs.
 *   **Relevance to our project:** This paper perfectly justifies our architectural constraints. It highlights the flaw in the broader SNN community's reliance on large-scale models for accuracy. Furthermore, their focus on Quantization and Pruning aligns directly with our Q1.7 quantization pipeline and our future goal of on-chip pruning via FPGA partial reconfiguration.
