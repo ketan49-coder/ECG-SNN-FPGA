@@ -131,8 +131,8 @@ class ECG_SuperSpike(nn.Module):
 
         for t in range(NUM_STEPS):
             if not drop_mask[t]:
-                # If dropped, carry forward previous state without adding new input
-                spk3_rec.append(torch.zeros_like(F.linear(mem2, self.fc3.weight)))
+                # FIX: Explicitly match the current batch size (x.size(0)) instead of assuming 128
+                spk3_rec.append(torch.zeros(x.size(0), OUTPUT_CLASSES, device=x.device))
                 continue
 
             cur1 = self.fc1(x)
