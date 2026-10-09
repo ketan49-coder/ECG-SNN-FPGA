@@ -124,3 +124,13 @@ This curated list of 20 references is structured exactly how you should present 
 *   **Approach:** Addresses the gap in resource-limited edge deployment by combining uniform quantization and structured pruning. Introduces weight rescaling for better bit-width utilization and a pruning criterion based on spatiotemporal spike activities to remove redundant kernels.
 *   **Performance:** Achieves SOTA efficiency and performance for lightweight SNNs, heavily reducing storage and computational costs.
 *   **Relevance to our project:** This paper perfectly justifies our architectural constraints. It highlights the flaw in the broader SNN community's reliance on large-scale models for accuracy. Furthermore, their focus on Quantization and Pruning aligns directly with our Q1.7 quantization pipeline and our future goal of on-chip pruning via FPGA partial reconfiguration.
+
+### A General-Purpose Neuromorphic Sensor based on Spiketrum Algorithm (Alsakkal et al., 2024)
+*   **Approach:** Area-optimized hardware implementation of the Spiketrum algorithm for encoding analog signals to spatiotemporal spikes. Focuses heavily on reducing hardware footprint rather than chasing pure speed.
+*   **Performance:** Achieved a 52% reduction in BRAMs, 31% fewer DSPs, and 6% fewer LUTs. Validated on an FPGA and IC for sound and ECG classification tasks.
+*   **Relevance to our project:** This paper perfectly validates our core "trade-off" strategy. It provides a formal blueprint for how to justify our design: proving that eliminating DSPs and optimizing for LUT/BRAM area is more critical for medical edge devices than pushing for maximum clock speed or nominal accuracy.
+
+### SparrowSNN: A Hardware/software Co-design for Energy Efficient ECG Classification (Yan et al., 2024)
+*   **Approach:** Identifies a critical flaw in standard edge SNNs: standard Integrate-and-Fire neurons re-read weights across all $T$ timesteps, inflating data movement and energy costs. Proposes a customizable quantized hybrid ANN-SNN model with a Sum-Spike-and-Fire (SSF) activation function for compact ASIC architectures.
+*   **Performance:** Evaluated directly on the MIT-BIH ECG dataset, achieving state-of-the-art accuracy with 20x to 100x lower energy consumption compared to ultra-low power solutions.
+*   **Relevance to our project:** This is a direct competitor paper classifying the exact same dataset on edge hardware. Their critique of "$T$ timestep weight re-reads" provides the perfect motivation for our future Time-To-First-Spike (TTFS) early-exit optimizations and validates our heavy reliance on quantization to minimize memory access energy.
