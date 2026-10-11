@@ -25,6 +25,15 @@ This report documents the performance of the 32-neuron multiplier-free SuperSpik
 
 This model serves as the core baseline for physical FPGA verification. It was trained for 60 epochs with Van Rossum distance loss ($\tau = 2.0$), Cosine Annealing learning rate scheduling, and evaluated under both Float32 and strict 8-bit Q1.7 post-training quantization.
 
+### Methodological Justification: Why 60 Epochs?
+The training budget was strictly locked to 60 epochs across all experimental runs based on three foundational criteria:
+1. **Cosine Annealing Calibration ($T_{\max} = 60$):** The learning rate scheduler follows $\eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max} - \eta_{\min})\left(1 + \cos\left(\frac{t}{T_{\max}}\pi\right)\right)$ from $\eta_{\max} = 2 \times 10^{-3}$ down to $\eta_{\min} = 1 \times 10^{-5}$. A 60-epoch cycle provides a complete exploration-to-convergence trajectory:
+   * *Epochs 1–25:* Coarse gradient exploration and broad basin discovery.
+   * *Epochs 25–45:* Transition and steady descent through the loss manifold.
+   * *Epochs 45–60:* Ultra-fine convergence at $\sim 10^{-5}$, allowing synaptic weights to settle into stable, generalizable minima without jumping over narrow valleys.
+2. **Experimental Control Across Dual Benchmarks:** Holding the epoch budget, optimizer (Adam), learning rate schedule, and loss function strictly constant at 60 epochs ensures that the **data partitioning protocol (Intra-Patient vs. Inter-Patient)** remains the sole independent variable. Direct comparisons can be made without confounding training duration.
+3. **SNN Spatiotemporal Convergence Dynamics:** Unlike non-spiking feedforward networks that compute instantaneous static mappings, SNNs with LIF neurons operate across $T=25$ discrete timesteps. Gradient flow via surrogate derivatives and Van Rossum spike-train convolution incurs temporal latency during weight adjustment; experimental sweeps confirmed that 30 epochs was premature (under-converged), whereas 60 epochs achieves full loss flattening.
+
 ### Classification Report (8-Bit Q1.7 Quantized Model)
 * **Overall Accuracy:** 95.34% *(Float32: 95.52% $\to$ Quantization drop: only -0.18%)*
 * **Macro-F1 Score:** 80.10%
