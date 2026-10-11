@@ -72,10 +72,10 @@ architecture rtl of snn_top is
     signal spikes_h2      : std_logic_vector(NUM_HIDDEN_2 - 1 downto 0) := (others => '0');
 
     ---------------------------------------------------------------------------
-    -- Membrane Potential Registers
+    -- Membrane Potential Registers (32 neurons for H1 & H2, 5 for Output)
     ---------------------------------------------------------------------------
-    signal vmem_h1  : vmem_array_16_t := (others => (others => '0'));
-    signal vmem_h2  : vmem_array_16_t := (others => (others => '0'));
+    signal vmem_h1  : vmem_array_32_t := (others => (others => '0'));
+    signal vmem_h2  : vmem_array_32_t := (others => (others => '0'));
     signal vmem_out : vmem_array_5_t  := (others => (others => '0'));
 
     ---------------------------------------------------------------------------
