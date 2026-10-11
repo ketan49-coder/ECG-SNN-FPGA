@@ -18,32 +18,35 @@ The network is a pure Spiking Neural Network (SNN) optimized for hardware constr
 * **Epochs:** 60
 * **Scheduler:** Cosine Annealing LR
 
-## 3. Evaluation Results
-The model was evaluated against the clean, unaugmented 20% test split (~22,000 samples).
-
-* **Overall Accuracy:** 95.19%
-* **Macro-F1 Score:** 80.10%
+## 3. Evaluation Protocol & Split Disclosure
+* **Dataset Split:** Stratified **Intra-Patient** Random Split (80% train / 20% test, $N_{\text{test}} = 21,896$, random seed 42).
+* **Patient Leakage Note:** Because beats were sampled randomly across all 48 MIT-BIH records, individual patient morphology is present in both training and test sets. **Direct comparison against strict inter-patient benchmarks (such as the de Chazal DS1/DS2 split) is explicitly avoided.** This evaluation serves strictly as an initial proof-of-concept for multiplier-free FPGA hardware feasibility.
+* **Overall Accuracy:** 95.19% (Single baseline training run, 60 epochs, Float32 baseline)
+* **Macro-F1 Score:** 80.10% *(Interpreted as evidence that minority classes are actively handled rather than collapsed, though precision metrics show persistent weaknesses).*
 
 ### Classification Report
-| Class | Precision | Recall | F1-Score | Support |
-| :--- | :--- | :--- | :--- | :--- |
-| **Normal (N)** | 0.9798 | 0.9721 | 0.9759 | 18124 |
-| **Supra (S)** | 0.5378 | 0.7032 | 0.6095 | 556 |
-| **Ventricular (V)** | 0.8679 | 0.8535 | 0.8606 | 1447 |
-| **Fusion (F)** | 0.4804 | 0.8438 | 0.6122 | 160 |
-| **Unknown (Q)** | 0.9872 | 0.9099 | 0.9470 | 1609 |
+| Class | Precision | Recall | F1-Score | Support ($N$) | Diagnostic Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Normal (N)** | 0.9798 | 0.9721 | 0.9759 | 18,124 | Solid baseline performance across dominant class. |
+| **Supra (S)** | 0.5378 | 0.7032 | 0.6095 | 556 | **Primary weak class:** 46.2% false alarms; 29.7% missed. |
+| **Ventricular (V)** | 0.8679 | 0.8535 | 0.8606 | 1,447 | Clinically solid; strong balance between precision & recall. |
+| **Fusion (F)** | 0.4804 | 0.8438 | 0.6122 | 160 | High recall (84.4%), but 48.0% precision; small $N$ caveat. |
+| **Unknown / Paced (Q)** | 0.9872 | 0.9099 | 0.9470 | 1,609 | Exceptionally strong due to distinct paced-beat morphology. |
 
-## 4. Medical & Hardware Analysis
-**1. Class Imbalance and Medical Sensitivity:**  
-The network demonstrates highly desirable medical characteristics. While the precision for classes 'S' (Supraventricular) and 'F' (Fusion) is around ~50%, the **Recall (Sensitivity) is extremely high (70% and 84%)**. This indicates the network correctly favors false positives over false negatives, ensuring dangerous arrhythmias are flagged rather than ignored. The primary confusion matrix overlap is between 'S' and 'N', which is expected given their morphological similarity on single-lead ECGs.
+## 4. In-Depth Class & Hardware Analysis
 
-**2. In-Depth Analysis of Fusion (F) Class (Precision vs. Recall):**  
-* **The Base-Rate Math (Why Precision is 48.04%):** True Fusion beats are an extreme minority (<0.73% of test data, 160 beats vs. 18,124 Normal beats — an imbalance ratio exceeding 113:1). Out of 18,124 Normal beats, the SNN only misclassified 82 as Fusion (a 99.55% specificity on Normal beats). However, because Normal beats are so overwhelmingly numerous, those 82 false positives inevitably dilute the pool of 135 true positives, resulting in a mathematical precision of $135 / (135 + 82 + 52 + 12) = 48.04\%$.
-* **Physiological Morphology:** Electrophysiologically, a Fusion beat occurs when a supraventricular (sinus) impulse and a ventricular ectopic impulse simultaneously activate the myocardium. The resulting waveform is physically an intermediate hybrid between a Normal (N) and a Ventricular (V) beat. The confusion matrix confirms this biological reality: 82 false positives came from class N and 52 from class V, aligning precisely with the two parent waveforms that generate fusion complexes.
-* **Clinical Prioritization (Sensitivity > Precision):** In wearable telemetry and edge arrhythmia screening, false negatives represent catastrophic clinical failure (e.g., missed pacemaker dysfunction or impending ventricular tachycardia). A false positive merely flags an ambiguous strip for physician review. Capturing 135 out of 160 rare Fusion beats (84.38% Recall) with an ultra-compact 32-neuron architecture demonstrates exceptional clinical sensitivity.
+**1. Supraventricular (S) — The Primary Bottleneck:**  
+Class S is the clear architectural weak point of the model. While recall reaches 70.3%, the precision of 53.8% indicates that roughly 46% of all beats flagged by the network as Supraventricular are false positives (primarily normal sinus beats). Conversely, roughly 30% of genuine Supraventricular beats are missed. Because single-lead ectopic atrial beats originate above the ventricles, their QRS complex is morphologically almost identical to normal sinus beats, differing primarily in subtle RR-interval timing rather than raw waveform shape.
 
-**3. Hardware Feasibility:**  
-Achieving an 80.10% Macro-F1 score with only 32 hidden neurons demonstrates extreme parameter efficiency. The entire weight matrix requires ~5.2 KB, easily fitting within 28% of a single 18Kb BRAM tile on the target Spartan-7 FPGA.
+**2. Fusion (F) — Small Sample Size & Precision Uncertainty:**  
+* **Statistical Uncertainty:** Although the network successfully caught 135 out of 160 Fusion beats (84.38% Recall), the test support ($N=160$) represents just 0.73% of the dataset. This small sample size introduces wide statistical uncertainty. 
+* **False Alarm Rate:** With a precision of 48.04%, approximately half of all predicted Fusion beats are false alarms (82 misclassified from Class N, 52 from Class V). While biologically explainable by the fact that fusion complexes are electrophysiological collisions between normal and ventricular waves, this metric must be presented cautiously as a handled minority class rather than a solved diagnostic problem.
+
+**3. Unknown / Paced (Q) — Physiological Explanation of High Metrics:**  
+Class Q demonstrates an unexpectedly high precision of 98.72% and recall of 90.99% across 1,609 test beats. This performance is grounded in AAMI EC57 annotation standards: Class Q includes paced beats (`/`), fusion of paced and normal (`f`), and unclassifiable beats (`Q`). Artificial pacemaker spikes introduce rapid, high-amplitude voltage transients that strongly stimulate the LIF neuron's membrane potential, making paced beats easily separable from intrinsic biological conduction.
+
+**4. Hardware Feasibility Target:**  
+A Macro-F1 score of 80.10% across an 80/20 intra-patient split confirms that the 32-neuron topology successfully preserves minority class activations without catastrophic forgetting. The entire weight matrix requires ~5.2 KB, occupying ~28% of a single 18Kb BRAM tile on the Xilinx Spartan-7 FPGA with 0 DSP multipliers.
 
 ## 5. Confusion Matrix
 ![Confusion Matrix](confudion matrix.png)
