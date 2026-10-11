@@ -6,36 +6,37 @@ import torch.nn.functional as F
 import snntorch as snn
 from snntorch import surrogate
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.metrics import classification_report, confusion_matrix
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Hyperparameters for Inter-Patient DS1/DS2 Training
+# Hyperparameters for Inter-Patient DS1/DS2 Training (4-Class AAMI Standard)
 # ─────────────────────────────────────────────────────────────────────────────
 INPUT_FEATURES   = 128
 HIDDEN_1_NEURONS = 32
 HIDDEN_2_NEURONS = 32
-OUTPUT_CLASSES   = 5
+OUTPUT_CLASSES   = 4          # 4-Class: N, S, V, F (Q dropped per de Chazal)
 NUM_STEPS        = 25
-BETA             = 0.9375       # 1 - 2^(-4) (Hardware bit-shift leak)
-THRESHOLD        = 0.5          # Q8.8 = x"0080"
+BETA             = 0.9375     # 1 - 2^(-4) (Hardware bit-shift leak)
+THRESHOLD        = 0.5        # Q8.8 = x"0080"
 BATCH_SIZE       = 128
 NUM_EPOCHS       = 60
 LEARNING_RATE    = 2e-3
 DROPOUT_P        = 0.3
-DATA_DIR         = "data_ds"    # Reading strictly from Inter-Patient directory
+DATA_DIR         = "data_ds"
 
 if os.path.exists("/content/drive/MyDrive/SNN_Models"):
     MODEL_DIR = "/content/drive/MyDrive/SNN_Models"
 else:
     MODEL_DIR = "models"
 
-CLASS_NAMES = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)', 'Unknown (Q)']
+CLASS_NAMES = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # van Rossum Distance Loss
 # ─────────────────────────────────────────────────────────────────────────────
 class VanRossumLoss(nn.Module):
-    def __init__(self, tau=2.0, num_classes=5):
+    def __init__(self, num_classes=4):
         super().__init__()
         self.decay = 0.9375  # Matches hardware shift-decay
         self.num_classes = num_classes
@@ -106,11 +107,17 @@ class ECG_SuperSpike(nn.Module):
 def load_data():
     X_train = np.load(os.path.join(DATA_DIR, "X_train.npy"))
     y_train = np.load(os.path.join(DATA_DIR, "y_train.npy"))
+    X_val   = np.load(os.path.join(DATA_DIR, "X_val.npy"))
+    y_val   = np.load(os.path.join(DATA_DIR, "y_val.npy"))
     X_test  = np.load(os.path.join(DATA_DIR, "X_test.npy"))
     y_test  = np.load(os.path.join(DATA_DIR, "y_test.npy"))
+    
     train_ds = TensorDataset(torch.tensor(X_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.long))
+    val_ds   = TensorDataset(torch.tensor(X_val,   dtype=torch.float32), torch.tensor(y_val,   dtype=torch.long))
     test_ds  = TensorDataset(torch.tensor(X_test,  dtype=torch.float32), torch.tensor(y_test,  dtype=torch.long))
+    
     return (DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0),
+            DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0),
             DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0))
 
 @torch.no_grad()
@@ -119,33 +126,44 @@ def evaluate(net, loader):
     correct = torch.zeros(OUTPUT_CLASSES)
     total   = torch.zeros(OUTPUT_CLASSES)
     t_ok, t_tot = 0, 0
+    all_preds, all_targets = [], []
+    
     for data, targets in loader:
         data, targets = data.to(device), targets.to(device)
         spk_out = net(data)
         preds   = spk_out.sum(0).argmax(1)
         t_ok   += (preds == targets).sum().item()
         t_tot  += targets.size(0)
+        all_preds.extend(preds.cpu().numpy())
+        all_targets.extend(targets.cpu().numpy())
         for c in range(OUTPUT_CLASSES):
             m = (targets == c)
             total[c]   += m.sum().item()
             correct[c] += (preds[m] == c).sum().item()
+            
     overall = 100.0 * t_ok / t_tot
     per_cls = 100.0 * correct / total.clamp(min=1)
-    return overall, per_cls
+    return overall, per_cls, np.array(all_targets), np.array(all_preds)
 
 def train_model():
-    train_loader, test_loader = load_data()
+    train_loader, val_loader, test_loader = load_data()
     net = ECG_SuperSpike().to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=LEARNING_RATE)
-    loss_fn = VanRossumLoss(tau=2.0, num_classes=OUTPUT_CLASSES)
+    loss_fn = VanRossumLoss(num_classes=OUTPUT_CLASSES)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-5)
     os.makedirs(MODEL_DIR, exist_ok=True)
-    best_acc = 0.0
+    best_val_acc = 0.0
+    best_model_path = os.path.join(MODEL_DIR, "snn_superspike_ds1_ds2_best.pth")
 
-    print(f"\nTraining SuperSpike on Inter-Patient DS1/DS2 Benchmark | Steps={NUM_STEPS} | Hidden=32")
-    print("=" * 70)
-    print(f"{'Ep':>4} | {'vR Loss':>9} | {'Train%':>7} | {'Test%':>7} | {'Gap':>6} | {'LR':>8}")
-    print("-" * 70)
+    print("\n" + "=" * 75)
+    print("TRAINING SUPERSPIKE ON DE CHAZAL INTER-PATIENT SPLIT (4-CLASS)")
+    print("=" * 75)
+    print("Validation: Monitored on DS1 Val (4 unseen training patients)")
+    print("Checkpointing: Purely on Val Accuracy (ZERO test-set snooping)")
+    print("Test Set: DS2 (22 unseen test patients) evaluated ONLY at the end")
+    print("-" * 75)
+    print(f"{'Ep':>4} | {'vR Loss':>9} | {'Train%':>7} | {'Val%':>7} | {'Gap':>6} | {'LR':>8}")
+    print("-" * 75)
 
     for epoch in range(NUM_EPOCHS):
         net.train()
@@ -169,25 +187,45 @@ def train_model():
         train_acc = 100.0 * correct / total
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
-        test_acc, per_cls = evaluate(net, test_loader)
-        gap = train_acc - test_acc
+        
+        # MONITOR STRICTLY ON VALIDATION SET (DS1 Val)
+        val_acc, val_per_cls, _, _ = evaluate(net, val_loader)
+        gap = train_acc - val_acc
         n = len(train_loader)
 
-        print(f"{epoch+1:>4} | {sum_loss/n:>9.4f} | {train_acc:>6.2f}% | {test_acc:>6.2f}% | {gap:>+5.1f}% | {current_lr:.2e}")
+        print(f"{epoch+1:>4} | {sum_loss/n:>9.4f} | {train_acc:>6.2f}% | {val_acc:>6.2f}% | {gap:>+5.1f}% | {current_lr:.2e}")
 
-        if test_acc > best_acc:
-            best_acc = test_acc
-            torch.save(net.state_dict(), f"{MODEL_DIR}/snn_superspike_ds1_ds2_best.pth")
+        # Checkpoint selection strictly by VALIDATION ACCURACY
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            torch.save(net.state_dict(), best_model_path)
 
         if (epoch + 1) % 10 == 0:
-            print(f"\n     Per-class accuracy on DS2 Test Patients (epoch {epoch+1}):")
+            print(f"\n     Per-class accuracy on DS1 Validation Patients (epoch {epoch+1}):")
             for c, name in enumerate(CLASS_NAMES):
-                bar = "█" * int(per_cls[c] / 5)
-                print(f"       {name:<30} {per_cls[c]:>6.2f}%  {bar}")
+                bar = "█" * int(val_per_cls[c] / 5)
+                print(f"       {name:<30} {val_per_cls[c]:>6.2f}%  {bar}")
             print()
 
-    print("=" * 70)
-    print(f"Best Inter-Patient (DS2) Test Accuracy : {best_acc:.2f}%")
+    print("=" * 75)
+    print(f"Training Complete! Best DS1 Validation Accuracy: {best_val_acc:.2f}%")
+    print("=" * 75)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FINAL EVALUATION: ONCE AND ONLY ONCE ON UNSEEN DS2 TEST PATIENTS
+    # ─────────────────────────────────────────────────────────────────────────
+    print("\nLoading best model checkpoint for final independent DS2 evaluation...")
+    net.load_state_dict(torch.load(best_model_path, map_location=device))
+    test_acc, test_per_cls, test_targets, test_preds = evaluate(net, test_loader)
+
+    print("\n" + "=" * 75)
+    print("FINAL INDEPENDENT TEST EVALUATION ON DS2 (22 PATIENTS):")
+    print("=" * 75)
+    print(f"Overall DS2 Accuracy: {test_acc:.2f}%\n")
+    print(classification_report(test_targets, test_preds, target_names=CLASS_NAMES, digits=4))
+    print("Confusion Matrix on DS2:")
+    print(confusion_matrix(test_targets, test_preds))
+    print("=" * 75)
 
 if __name__ == "__main__":
     train_model()

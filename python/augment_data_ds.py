@@ -2,7 +2,7 @@ import os
 import numpy as np
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Fast Vectorized Augmentation for DS1 (Inter-Patient Training Set)
+# Fast Vectorized Augmentation for DS1 Train Set (4-Class)
 # ─────────────────────────────────────────────────────────────────────────────
 DATA_DIR = "data_ds"
 OUTPUT_DIR = "data_ds"
@@ -50,7 +50,7 @@ def augment_class_vectorized(X_class, n_target):
 
 def main():
     print("=" * 65)
-    print("AUGMENTING DS1 INTER-PATIENT TRAINING SET")
+    print("AUGMENTING DS1 INTER-PATIENT TRAINING SET (4-CLASS: N, S, V, F)")
     print("=" * 65)
     
     X_train = np.load(os.path.join(DATA_DIR, "X_train.npy"))
@@ -61,7 +61,7 @@ def main():
     X_balanced = []
     y_balanced = []
     
-    for c in range(5):
+    for c in range(4):
         mask = (y_train == c)
         X_c = X_train[mask]
         n_c = len(X_c)
@@ -71,19 +71,12 @@ def main():
             X_balanced.append(X_c)
             y_balanced.append(np.full(n_c, c, dtype=np.int64))
             print(f"  Class 0 (Normal): kept {n_c} samples as-is.")
-        elif c in [1, 2, 3]:
+        else:
             # Augment minority classes S, V, F to TARGET_PER_MINORITY
             X_c_aug = augment_class_vectorized(X_c, TARGET_PER_MINORITY)
             X_balanced.append(X_c_aug)
             y_balanced.append(np.full(len(X_c_aug), c, dtype=np.int64))
             print(f"  Class {c}: {n_c} -> augmented to {len(X_c_aug)} samples.")
-        else:
-            # Class 4 (Q) has only 8 beats in DS1 (non-paced)
-            if n_c > 0:
-                X_c_aug = augment_class_vectorized(X_c, 2000)
-                X_balanced.append(X_c_aug)
-                y_balanced.append(np.full(len(X_c_aug), c, dtype=np.int64))
-                print(f"  Class {c} (Q): {n_c} -> augmented to {len(X_c_aug)} samples.")
                 
     X_train_aug = np.vstack(X_balanced)
     y_train_aug = np.concatenate(y_balanced)
