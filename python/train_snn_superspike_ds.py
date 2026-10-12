@@ -6,15 +6,15 @@ import torch.nn.functional as F
 import snntorch as snn
 from snntorch import surrogate
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Hyperparameters for Inter-Patient DS1/DS2 Training (4-Class AAMI Standard)
+# Step 1: Checkpoint Selection on Validation Macro-F1 (4-Class AAMI)
 # ─────────────────────────────────────────────────────────────────────────────
 INPUT_FEATURES   = 128
 HIDDEN_1_NEURONS = 32
 HIDDEN_2_NEURONS = 32
-OUTPUT_CLASSES   = 4          # 4-Class: N, S, V, F (Q dropped per de Chazal)
+OUTPUT_CLASSES   = 4          # 4-Class: N, S, V, F
 NUM_STEPS        = 25
 BETA             = 0.9375     # 1 - 2^(-4) (Hardware bit-shift leak)
 THRESHOLD        = 0.5        # Q8.8 = x"0080"
@@ -32,13 +32,10 @@ else:
 CLASS_NAMES = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# van Rossum Distance Loss
-# ─────────────────────────────────────────────────────────────────────────────
 class VanRossumLoss(nn.Module):
     def __init__(self, num_classes=4):
         super().__init__()
-        self.decay = 0.9375  # Matches hardware shift-decay
+        self.decay = 0.9375
         self.num_classes = num_classes
 
     def forward(self, spk_out, targets):
@@ -62,9 +59,6 @@ class VanRossumLoss(nn.Module):
         loss = F.mse_loss(filtered_out, filtered_tgt, reduction='none')
         return loss.sum(dim=(0, 2)).mean()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SNN Topology
-# ─────────────────────────────────────────────────────────────────────────────
 class ECG_SuperSpike(nn.Module):
     def __init__(self, dropout_p=DROPOUT_P):
         super().__init__()
@@ -123,27 +117,19 @@ def load_data():
 @torch.no_grad()
 def evaluate(net, loader):
     net.eval()
-    correct = torch.zeros(OUTPUT_CLASSES)
-    total   = torch.zeros(OUTPUT_CLASSES)
-    t_ok, t_tot = 0, 0
     all_preds, all_targets = [], []
-    
     for data, targets in loader:
-        data, targets = data.to(device), targets.to(device)
+        data = data.to(device)
         spk_out = net(data)
         preds   = spk_out.sum(0).argmax(1)
-        t_ok   += (preds == targets).sum().item()
-        t_tot  += targets.size(0)
         all_preds.extend(preds.cpu().numpy())
-        all_targets.extend(targets.cpu().numpy())
-        for c in range(OUTPUT_CLASSES):
-            m = (targets == c)
-            total[c]   += m.sum().item()
-            correct[c] += (preds[m] == c).sum().item()
-            
-    overall = 100.0 * t_ok / t_tot
-    per_cls = 100.0 * correct / total.clamp(min=1)
-    return overall, per_cls, np.array(all_targets), np.array(all_preds)
+        all_targets.extend(targets.numpy())
+        
+    all_targets = np.array(all_targets)
+    all_preds   = np.array(all_preds)
+    acc = 100.0 * np.mean(all_preds == all_targets)
+    macro_f1 = 100.0 * f1_score(all_targets, all_preds, average='macro', zero_division=0)
+    return acc, macro_f1, all_targets, all_preds
 
 def train_model():
     train_loader, val_loader, test_loader = load_data()
@@ -152,18 +138,20 @@ def train_model():
     loss_fn = VanRossumLoss(num_classes=OUTPUT_CLASSES)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=1e-5)
     os.makedirs(MODEL_DIR, exist_ok=True)
-    best_val_acc = 0.0
+    
+    best_val_f1 = 0.0
+    best_epoch = 0
     best_model_path = os.path.join(MODEL_DIR, "snn_superspike_ds1_ds2_best.pth")
 
-    print("\n" + "=" * 75)
-    print("TRAINING SUPERSPIKE ON DE CHAZAL INTER-PATIENT SPLIT (4-CLASS)")
-    print("=" * 75)
-    print("Validation: Monitored on DS1 Val (4 unseen training patients)")
-    print("Checkpointing: Purely on Val Accuracy (ZERO test-set snooping)")
-    print("Test Set: DS2 (22 unseen test patients) evaluated ONLY at the end")
-    print("-" * 75)
-    print(f"{'Ep':>4} | {'vR Loss':>9} | {'Train%':>7} | {'Val%':>7} | {'Gap':>6} | {'LR':>8}")
-    print("-" * 75)
+    print("\n" + "=" * 80)
+    print("STEP 1: DS1/DS2 RETRAIN WITH VALIDATION MACRO-F1 CHECKPOINT SELECTION")
+    print("=" * 80)
+    print("Validation Set: 7 Unseen DS1 Patients (stable, low-noise representation)")
+    print("Checkpoint Rule: Best VALIDATION MACRO-F1 (penalizes majority-class bias)")
+    print("Test Set: DS2 (22 completely unseen patients, evaluated ONCE at the end)")
+    print("-" * 80)
+    print(f"{'Ep':>4} | {'Loss':>8} | {'Train%':>7} | {'Val Acc%':>9} | {'Val Macro-F1%':>14} | {'LR':>8}")
+    print("-" * 80)
 
     for epoch in range(NUM_EPOCHS):
         net.train()
@@ -188,44 +176,40 @@ def train_model():
         scheduler.step()
         current_lr = scheduler.get_last_lr()[0]
         
-        # MONITOR STRICTLY ON VALIDATION SET (DS1 Val)
-        val_acc, val_per_cls, _, _ = evaluate(net, val_loader)
-        gap = train_acc - val_acc
+        # Evaluate on the 7 Validation Patients
+        val_acc, val_f1, _, _ = evaluate(net, val_loader)
         n = len(train_loader)
 
-        print(f"{epoch+1:>4} | {sum_loss/n:>9.4f} | {train_acc:>6.2f}% | {val_acc:>6.2f}% | {gap:>+5.1f}% | {current_lr:.2e}")
-
-        # Checkpoint selection strictly by VALIDATION ACCURACY
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        marker = ""
+        # CHECKPOINT SELECTION ON VALIDATION MACRO-F1!
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
+            best_epoch = epoch + 1
             torch.save(net.state_dict(), best_model_path)
+            marker = " ★ BEST"
 
-        if (epoch + 1) % 10 == 0:
-            print(f"\n     Per-class accuracy on DS1 Validation Patients (epoch {epoch+1}):")
-            for c, name in enumerate(CLASS_NAMES):
-                bar = "█" * int(val_per_cls[c] / 5)
-                print(f"       {name:<30} {val_per_cls[c]:>6.2f}%  {bar}")
-            print()
+        print(f"{epoch+1:>4} | {sum_loss/n:>8.4f} | {train_acc:>6.2f}% | {val_acc:>8.2f}% | {val_f1:>13.2f}% | {current_lr:.2e}{marker}")
 
-    print("=" * 75)
-    print(f"Training Complete! Best DS1 Validation Accuracy: {best_val_acc:.2f}%")
-    print("=" * 75)
+    print("=" * 80)
+    print(f"Training Complete! Best Checkpoint was Epoch {best_epoch} (Val Macro-F1: {best_val_f1:.2f}%)")
+    print("=" * 80)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # FINAL EVALUATION: ONCE AND ONLY ONCE ON UNSEEN DS2 TEST PATIENTS
+    # FINAL TEST EVALUATION ON UNSEEN DS2 PATIENTS
     # ─────────────────────────────────────────────────────────────────────────
-    print("\nLoading best model checkpoint for final independent DS2 evaluation...")
+    print(f"\nLoading best checkpoint from Epoch {best_epoch} for DS2 test evaluation...")
     net.load_state_dict(torch.load(best_model_path, map_location=device))
-    test_acc, test_per_cls, test_targets, test_preds = evaluate(net, test_loader)
+    test_acc, test_f1, test_targets, test_preds = evaluate(net, test_loader)
 
-    print("\n" + "=" * 75)
-    print("FINAL INDEPENDENT TEST EVALUATION ON DS2 (22 PATIENTS):")
-    print("=" * 75)
-    print(f"Overall DS2 Accuracy: {test_acc:.2f}%\n")
+    print("\n" + "=" * 80)
+    print("FINAL INDEPENDENT EVALUATION ON DS2 (22 UNSEEN TEST PATIENTS):")
+    print("=" * 80)
+    print(f"DS2 Overall Test Accuracy : {test_acc:.2f}%")
+    print(f"DS2 Test Macro-F1 Score   : {test_f1:.2f}%\n")
     print(classification_report(test_targets, test_preds, target_names=CLASS_NAMES, digits=4))
     print("Confusion Matrix on DS2:")
     print(confusion_matrix(test_targets, test_preds))
-    print("=" * 75)
+    print("=" * 80)
 
 if __name__ == "__main__":
     train_model()

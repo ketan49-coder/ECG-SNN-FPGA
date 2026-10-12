@@ -130,7 +130,22 @@ This curated list of 20 references is structured exactly how you should present 
 *   **Performance:** Achieved a 52% reduction in BRAMs, 31% fewer DSPs, and 6% fewer LUTs. Validated on an FPGA and IC for sound and ECG classification tasks.
 *   **Relevance to our project:** This paper perfectly validates our core "trade-off" strategy. It provides a formal blueprint for how to justify our design: proving that eliminating DSPs and optimizing for LUT/BRAM area is more critical for medical edge devices than pushing for maximum clock speed or nominal accuracy.
 
-### SparrowSNN: A Hardware/software Co-design for Energy Efficient ECG Classification (Yan et al., 2024)
-*   **Approach:** Identifies a critical flaw in standard edge SNNs: standard Integrate-and-Fire neurons re-read weights across all $T$ timesteps, inflating data movement and energy costs. Proposes a customizable quantized hybrid ANN-SNN model with a Sum-Spike-and-Fire (SSF) activation function for compact ASIC architectures.
-*   **Performance:** Evaluated directly on the MIT-BIH ECG dataset, achieving state-of-the-art accuracy with 20x to 100x lower energy consumption compared to ultra-low power solutions.
-*   **Relevance to our project:** This is a direct competitor paper classifying the exact same dataset on edge hardware. Their critique of "$T$ timestep weight re-reads" provides the perfect motivation for our future Time-To-First-Spike (TTFS) early-exit optimizations and validates our heavy reliance on quantization to minimize memory access energy.
+---
+
+## 🚨 MUST CITE: Direct ECG Hardware & On-Chip Learning Competitors
+*These three papers represent our most direct hardware competitors. When drafting the paper, specifically reference their ECG benchmarking sections to contrast their hardware tradeoffs, learning rules, and accuracy against our architecture.*
+
+### 1. A Compact Online-Learning Spiking Neuromorphic Biosignal Processor (Fang et al., 2022)
+*   **The Competitor:** Zynq-7020 FPGA implementation focused on *online-learning* via STDP.
+*   **ECG Section Relevance:** This is our closest competitor for the "Final Boss" phase. They target wearable ECG devices capable of adapting to specific patients on the fly using hardware-friendly trace-based STDP. 
+*   **Our Counter-Argument:** While their area footprint is tiny, their ECG accuracy maxes out at **83%** due to the unsupervised nature of STDP. We cite this to justify why we use Deep Continuous Local Learning (DCLL)—maintaining the same "on-chip" hardware benefits but utilizing local error gradients to push ECG accuracy into the 90s.
+
+### 2. SparrowSNN: A Hardware/software Co-design for Energy Efficient ECG Classification (Yan et al., 2024)
+*   **The Competitor:** Extremely low-power ASIC design utilizing a hybrid ANN-SNN and quantized weights.
+*   **ECG Section Relevance:** They benchmark directly on the MIT-BIH dataset (achieving SOTA accuracy with 20x-100x lower energy). More importantly, their ECG analysis critiques standard Integrate-and-Fire networks for re-reading weights across all $T$ timesteps, causing massive memory-access power drain.
+*   **Our Counter-Argument:** We cite this to validate our Q1.7 quantization pipeline. Furthermore, their critique of $T$-timestep weight reads is the foundational argument we will use to justify implementing Time-To-First-Spike (TTFS) early-exit logic, bypassing the need for their complex Sum-Spike-and-Fire (SSF) neurons while retaining FPGA reconfigurability.
+
+### 3. TaiBai: A Programmable Neuromorphic Chip with On-Chip Learning Rules
+*   **The Competitor:** A highly versatile neuromorphic chip designed for edge AI, featuring programmable on-chip learning rules.
+*   **ECG Section Relevance:** TaiBai utilizes ECG anomaly detection as one of its core benchmark tasks to prove its on-chip adaptability. It represents the gold standard for flexible, reconfigurable neuromorphic hardware.
+*   **Our Counter-Argument:** We cite TaiBai to show the industry trend toward programmable learning rules at the edge. We contrast their ASIC-level programmability with our FPGA partial-reconfiguration approach (QP-SNN logic), showing that similar flexibility and ECG adaptation can be achieved dynamically on COTS (Commercial Off-The-Shelf) FPGAs without requiring million-dollar custom silicon fabrication.

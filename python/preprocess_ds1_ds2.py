@@ -2,9 +2,6 @@ import wfdb
 import numpy as np
 import os
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Path Configuration (Autodetects Colab Drive or Local Directory)
-# ─────────────────────────────────────────────────────────────────────────────
 POSSIBLE_PATHS = [
     r"mit-bih-arrhythmia-database-1.0.0\mit-bih-arrhythmia-database-1.0.0",
     r"mit-bih-arrhythmia-database-1.0.0",
@@ -13,125 +10,83 @@ POSSIBLE_PATHS = [
 ]
 
 DATASET_DIR = None
-for p in POSSIBLE_PATHS:
-    if os.path.exists(p) and (os.path.exists(os.path.join(p, "100.dat")) or os.path.exists(os.path.join(p, "100.hea"))):
-        DATASET_DIR = p
+for root, dirs, files in os.walk('/content'):
+    if '100.hea' in files or '100.dat' in files:
+        DATASET_DIR = root
         break
+
+if DATASET_DIR is None:
+    for p in POSSIBLE_PATHS:
+        if os.path.exists(p) and (os.path.exists(os.path.join(p, "100.dat")) or os.path.exists(os.path.join(p, "100.hea"))):
+            DATASET_DIR = p
+            break
 
 if DATASET_DIR is None:
     DATASET_DIR = r"mit-bih-arrhythmia-database-1.0.0\mit-bih-arrhythmia-database-1.0.0"
 
 OUTPUT_DIR = "data_ds"
-WINDOW_SIZE = 128  # 128 samples per heartbeat
+WINDOW_SIZE = 128
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4-Class AAMI Mapping (De Chazal Standard: Q is dropped)
-# ─────────────────────────────────────────────────────────────────────────────
-# Class Q is dropped per standard benchmark protocol since paced records
-# (102, 104, 107, 217) are excluded, leaving Q virtually empty (<0.02%).
 AAMI_4CLASS_MAPPING = {
-    'N': 0, 'L': 0, 'R': 0, 'e': 0, 'j': 0,  # Normal (N)
-    'A': 1, 'a': 1, 'S': 1, 'J': 1,          # Supraventricular (S)
-    'V': 2, 'E': 2,                          # Ventricular (V)
-    'F': 3                                   # Fusion (F)
+    'N': 0, 'L': 0, 'R': 0, 'e': 0, 'j': 0,
+    'A': 1, 'a': 1, 'S': 1, 'J': 1,
+    'V': 2, 'E': 2,
+    'F': 3
 }
 CLASS_NAMES = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)']
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Strict Patient Record Partitioning (De Chazal et al., IEEE TBME 2004)
-# ─────────────────────────────────────────────────────────────────────────────
-# 4 Paced records strictly dropped: 102, 104, 107, 217
-
-# DS1 partitioned into Train (18 patients) and Val (4 patients) by RECORD
+# STEP 1: Increase validation size to 7 patients for a stable, low-noise signal
 DS1_TRAIN_RECORDS = [
-    '101', '106', '108', '109', '112', '114', '115', '116', '118', '119',
-    '122', '124', '201', '203', '205', '207', '208', '230'
-]
+    '101', '106', '108', '109', '112', '114', '115', '116', '118', '122',
+    '201', '203', '207', '208', '230'
+] # 15 training patients
 
 DS1_VAL_RECORDS = [
-    '209', '215', '220', '223'  # 4 validation patients from DS1
-]
+    '119', '124', '205', '209', '215', '220', '223'
+] # 7 validation patients (broad clinical diversity)
 
-# DS2 Test Set (22 patients) - Strictly untouched during training & tuning
 DS2_TEST_RECORDS = [
     '100', '103', '105', '111', '113', '117', '121', '123', '200', '202',
     '210', '212', '213', '214', '219', '221', '222', '228', '231', '232',
     '233', '234'
-]
+] # 22 test patients (strictly untouched)
 
-def extract_beats_from_records(record_list):
+def extract_beats(records):
     X, y = [], []
-    for record_name in record_list:
-        record_path = os.path.join(DATASET_DIR, record_name)
+    for rec in records:
         try:
-            record = wfdb.rdrecord(record_path, channels=[0])
-            signal = record.p_signal.flatten()
-            annotation = wfdb.rdann(record_path, 'atr')
-            peaks = annotation.sample
-            symbols = annotation.symbol
-            
-            for peak, symbol in zip(peaks, symbols):
-                if symbol in AAMI_4CLASS_MAPPING:
-                    left = peak - (WINDOW_SIZE // 2)
-                    right = peak + (WINDOW_SIZE // 2)
-                    if left >= 0 and right < len(signal):
-                        window = signal[left:right]
-                        min_v, max_v = np.min(window), np.max(window)
-                        if max_v > min_v:
-                            window_norm = (window - min_v) / (max_v - min_v)
-                            X.append(window_norm)
-                            y.append(AAMI_4CLASS_MAPPING[symbol])
+            r = wfdb.rdrecord(os.path.join(DATASET_DIR, rec), channels=[0])
+            sig = r.p_signal.flatten()
+            ann = wfdb.rdann(os.path.join(DATASET_DIR, rec), 'atr')
+            for p, s in zip(ann.sample, ann.symbol):
+                if s in AAMI_4CLASS_MAPPING:
+                    left, right = p - 64, p + 64
+                    if left >= 0 and right < len(sig):
+                        w = sig[left:right]
+                        mi, ma = np.min(w), np.max(w)
+                        if ma > mi:
+                            X.append((w - mi) / (ma - mi))
+                            y.append(AAMI_4CLASS_MAPPING[s])
         except Exception as e:
-            print(f"  Warning: could not read {record_name}: {e}")
-            
+            print(f"Error reading {rec}: {e}")
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.int64)
 
-def print_distribution(y, set_name):
-    print(f"\n{set_name} Class Distribution (Total: {len(y)} beats):")
-    unique, counts = np.unique(y, return_counts=True)
-    counts_dict = dict(zip(unique, counts))
-    for c in range(4):
-        cnt = counts_dict.get(c, 0)
-        pct = 100.0 * cnt / len(y) if len(y) > 0 else 0
-        print(f"  Class {c} ({CLASS_NAMES[c]:<22}): {cnt:>6d} ({pct:>5.2f}%)")
-
 def main():
-    print("=" * 70)
-    print("DE CHAZAL (2004) RIGOROUS INTER-PATIENT PREPROCESSING (4-CLASS)")
-    print("=" * 70)
-    print(f"Reading database from: {DATASET_DIR}")
-    print("Excluded Paced Records: 102, 104, 107, 217 (per AAMI EC57 protocol)")
-    print("Class Q: Excluded (presents < 0.02% of non-paced beats)")
-    print(f"Partitions: DS1 Train (18 pts) | DS1 Val (4 pts) | DS2 Test (22 pts)\n")
-    
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    
-    print("1. Extracting DS1 Train (18 Records)...")
-    X_train, y_train = extract_beats_from_records(DS1_TRAIN_RECORDS)
-    print_distribution(y_train, "DS1 Train (18 Patients)")
-    
-    print("\n2. Extracting DS1 Val (4 Records)...")
-    X_val, y_val = extract_beats_from_records(DS1_VAL_RECORDS)
-    print_distribution(y_val, "DS1 Val (4 Patients)")
-    
-    print("\n3. Extracting DS2 Test (22 Records - COMPLETELY INDEPENDENT)...")
-    X_test, y_test = extract_beats_from_records(DS2_TEST_RECORDS)
-    print_distribution(y_test, "DS2 Test (22 Patients)")
-    
-    # Save partitioned data into data_ds/
-    np.save(os.path.join(OUTPUT_DIR, "X_train.npy"), X_train)
-    np.save(os.path.join(OUTPUT_DIR, "y_train.npy"), y_train)
-    np.save(os.path.join(OUTPUT_DIR, "X_val.npy"),   X_val)
-    np.save(os.path.join(OUTPUT_DIR, "y_val.npy"),   y_val)
-    np.save(os.path.join(OUTPUT_DIR, "X_test.npy"),  X_test)
-    np.save(os.path.join(OUTPUT_DIR, "y_test.npy"),  y_test)
-    
-    print(f"\n=======================================================")
-    print(f"SUCCESS: Saved Inter-Patient datasets to '{OUTPUT_DIR}/'")
-    print(f"Train: {X_train.shape} | Val: {X_val.shape} | Test: {X_test.shape}")
-    print(f"Validation Leakage: ZERO (Record-level partition from DS1)")
-    print(f"Test Snooping: ZERO (DS2 only touched at final evaluation)")
-    print("=======================================================")
+    print("Extracting DS1 Train (15 patients)...")
+    X_train, y_train = extract_beats(DS1_TRAIN_RECORDS)
+    print("Extracting DS1 Val (7 patients)...")
+    X_val, y_val = extract_beats(DS1_VAL_RECORDS)
+    print("Extracting DS2 Test (22 patients)...")
+    X_test, y_test = extract_beats(DS2_TEST_RECORDS)
+
+    np.save(f"{OUTPUT_DIR}/X_train.npy", X_train)
+    np.save(f"{OUTPUT_DIR}/y_train.npy", y_train)
+    np.save(f"{OUTPUT_DIR}/X_val.npy", X_val)
+    np.save(f"{OUTPUT_DIR}/y_val.npy", y_val)
+    np.save(f"{OUTPUT_DIR}/X_test.npy", X_test)
+    np.save(f"{OUTPUT_DIR}/y_test.npy", y_test)
+    print(f"Done! Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
 if __name__ == "__main__":
     main()
