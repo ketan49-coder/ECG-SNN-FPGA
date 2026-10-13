@@ -192,6 +192,11 @@ test_loader = DataLoader(
                   torch.tensor(y_test,  dtype=torch.long)),
     batch_size=BATCH_SIZE, shuffle=False)
 
+# ── Checkpoint directory ──────────────────────────────────────────────────────
+CKPT_DIR = "/content/drive/MyDrive/SNN-ECG/checkpoints"
+os.makedirs(CKPT_DIR, exist_ok=True)
+print(f"Checkpoints will be saved to: {CKPT_DIR}")
+
 # ── Training loop ─────────────────────────────────────────────────────────────
 net       = ECG_Spartan7_SNN().to(device)
 criterion = VanRossumLoss(tau_decay=BETA)
@@ -217,7 +222,9 @@ for ep in range(1, NUM_EPOCHS + 1):
     if val_f1 > best_val_f1:
         best_val_f1 = val_f1; best_epoch = ep
         best_state = {k: v.cpu().clone() for k, v in net.state_dict().items()}
-        marker = " (*BEST VAL F1*)"
+        ckpt_path = os.path.join(CKPT_DIR, f"lighter_smote_seed{SEED}_best.pth")
+        torch.save({'epoch': ep, 'val_f1': val_f1, 'state_dict': best_state}, ckpt_path)
+        marker = " (*BEST VAL F1* — saved to Drive)"
     if ep % 5 == 0 or ep == 1 or marker:
         print(f"  [Ep {ep:02d}/{NUM_EPOCHS}] Loss: {total_loss/len(train_loader):.4f} "
               f"| Val Acc: {val_acc:.2f}% | Val F1: {val_f1:.2f}%{marker}")

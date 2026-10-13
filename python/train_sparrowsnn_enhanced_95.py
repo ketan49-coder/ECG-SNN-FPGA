@@ -171,6 +171,11 @@ def evaluate(net, loader):
     return acc, f1, all_t, all_p
 
 # 6. Benchmark Across Seeds
+# Checkpoint directory — saves to Drive so weights survive session end
+CKPT_DIR = "/content/drive/MyDrive/SNN-ECG/checkpoints"
+os.makedirs(CKPT_DIR, exist_ok=True)
+print(f"Checkpoints will be saved to: {CKPT_DIR}")
+
 results = []
 for seed in SEEDS:
     print("\n" + "=" * 80)
@@ -244,7 +249,9 @@ for seed in SEEDS:
             best_val_f1 = val_f1
             best_epoch = ep
             best_state = {k: v.cpu().clone() for k, v in net.state_dict().items()}
-            marker = " (*BEST VAL F1*)"
+            ckpt_path = os.path.join(CKPT_DIR, f"enhanced_seed{seed}_best.pth")
+            torch.save({'epoch': ep, 'val_f1': val_f1, 'state_dict': best_state}, ckpt_path)
+            marker = " (*BEST VAL F1* — saved to Drive)"
 
         if ep % 5 == 0 or ep == 1 or "BEST" in marker:
             print(f"  [Ep {ep:02d}/{NUM_EPOCHS}] Loss: {total_loss/len(train_loader):.4f} | Val Acc: {val_acc:.2f}% | Val Macro-F1: {val_f1:.2f}%{marker}")
