@@ -16,6 +16,7 @@ This report documents the performance of the 32-neuron multiplier-free SuperSpik
 | **Stratified Random Split (80/20)** | **5 Classes** (N, S, V, F, Q) | Beat-level stratified sampling across 48 records. Individual patient morphology present in train and test. | Float32: 95.19%<br>**Q1.7 Quantized: 95.34%** | **95.34%** (Quantized) | **80.10%** | 21,896 beats | **Target for FPGA Demonstration** (`snn_pkg_superspike_q17.vhd`) |
 | **SparrowSNN-Protocol Random Split — Baseline (60/20/20)** | **4 Classes** (N, S, V, F) | 44 non-paced records (paced dropped). Random 60/20/20 beat split, standard SMOTE (1:1:1:1) on train only. Multiplier-free LIF SNN, $T=16$ (3 Seeds: 42, 123, 999). | Float32 (3 Seeds) | **93.26 ± 0.82%** | **71.14 ± 1.90%** | 20,141 beats | Controlled hardware baseline vs. SparrowSNN ASIC |
 | **SparrowSNN-Protocol Random Split — Enhanced ✅ (60/20/20)** | **4 Classes** (N, S, V, F) | 44 non-paced records. Same 60/20/20 beat split. **Calibrated SMOTE ($N=54\text{k}, S=25\text{k}, V=25\text{k}, F=20\text{k}$) + ECG Augmentation ($\pm10\%$ amp, $\sigma=0.01$ noise) + $T=25$ timesteps** (3 Seeds: 42, 123, 999). | Float32 (3 Seeds) | **96.16 ± 0.25%** | **80.47 ± 0.72%** | 19,591 beats | **Surpasses SparrowSNN Pure IF SNN (84–90%)** |
+| **SparrowSNN-Protocol Random Split — Lighter SMOTE 🚀 (60/20/20)** | **4 Classes** (N, S, V, F) | 44 non-paced records. Same 60/20/20 beat split. **Lighter SMOTE ($N=54\text{k}, S=8\text{k}, V=25\text{k}, F=6\text{k}$) + ECG Augmentation + $T=25$** (3 Seeds: 42, 123, 999). | Float32 (3 Seeds) | **97.24 ± 0.19%** | **83.85 ± 1.36%** | 20,141 beats | **Top Accuracy & Precision Champion (S Prec 75.9%, F Prec 73.9%)** |
 | **De Chazal Inter-Patient Split (DS1/DS2)** | **4 Classes** (N, S, V, F) | 44 records (4 paced records dropped). Record-level partition: DS1 (Train/Val), DS2 (Test). **No patient overlap.** | Float32: 81.77%<br>**Step 3b (3 Seeds): 85.89%** | **85.89 ± 2.60%** (Step 3b) | **49.72 ± 0.43%** | 49,696 beats | Benchmark for Scientific Discussion & Generalization |
 
 > [!NOTE]
@@ -140,18 +141,57 @@ True V:     53       6    1325      17  True V:     38      11    1327      25  
 True F:     17       1       8     135  True F:     19       0      10     132  True F:     13       1       6     141
 ```
 
-### Updated Comparative Literature Audit (Random Beat Split on MIT-BIH)
+### Comparative Literature Audit (Random Beat Split on MIT-BIH)
 | Work / Hardware | Arithmetic / Multipliers | Classes | Reported Accuracy | Reported Arrhythmia Metrics |
 | :--- | :--- | :---: | :---: | :--- |
 | **Chu et al. [16] (TBioCAS 2022)** | 40nm Custom SNN ASIC | 4 | 98.22% | Not fully disclosed per-class |
 | **SparrowSNN (Hybrid SNN-ANN)** | 22nm Custom ASIC with MAC compute units | 4 | 98.61% | Class 0: 99.2%, Class 2: 96.5% (S & F omitted) |
 | **SparrowSNN (Pure SSF SNN)** | 22nm Custom ASIC (T=31) | 4 | 97.53% | Not disclosed |
+| **Our Work — Lighter SMOTE Ablation 🚀** | **Zero DSP Slices (Multiplier-Free Shift-Add)** | **4** | **97.24% ± 0.19%** | **N: 98.6%, S: 66.4%, V: 95.2%, F: 73.3% (S Prec: 75.9%, F Prec: 73.9%)** |
+| **Our Work — Enhanced Benchmark ✅** | **Zero DSP Slices (Multiplier-Free Shift-Add)** | **4** | **96.16% ± 0.25%** | **N: 96.9%, S: 80.0%, V: 94.7%, F: 84.5%** |
 | **SparrowSNN (Pure IF SNN)** | 22nm Custom ASIC (T=15–31) | 4 | 84.15%–89.66% | Substantially lower than our pure SNN |
 | **Our Work — Baseline (Spartan-7 SNN)** | **Zero DSP Slices** | **4** | **93.26% ± 0.82%** | **N: 93.4%, S: 85.3%, V: 95.5%, F: 87.1%** |
-| **Our Work — Enhanced ✅ (Spartan-7 SNN)** | **Zero DSP Slices** | **4** | **96.16% ± 0.25%** | **N: 96.9%, S: 80.0%, V: 94.7%, F: 84.5%** |
 
-> [!NOTE]
-> Our enhanced multiplier-free Spartan-7 SNN at **96.16%** now surpasses SparrowSNN's Pure IF SNN (84–90%) and its Pure SSF SNN (97.53%) is only ~1.4% higher — achieved on a 22nm custom ASIC with dedicated multiplier units vs. our zero-DSP Spartan-7 FPGA implementation.
+---
+
+### 2d. Ablation Study: Heavy vs. Lighter SMOTE (Precision Optimization)
+
+To investigate the trade-off between minority class recall and false alarm rate, a controlled ablation was conducted reducing synthetic oversampling from heavy ratios ($S=25\text{k}, F=20\text{k}$) to lighter targets ($S=8\text{k}, F=6\text{k}$), keeping Normal anchored naturally ($N\approx54\text{k}$) and $V=25\text{k}$. All other hyperparameters ($T=25$, 60 epochs, 60/20/20 split across 100,704 beats, Cosine Annealing, Adam lr=2e-3) were strictly maintained across Seeds 42, 123, and 999.
+
+#### Pre-Registered Prediction vs. Empirical Results
+* **Prediction:** *"S precision rises above 65% and F precision above 60%, while S/F F1 remain within ~3 points of baseline (65–71% and 64–70%)."*
+* **Empirical Outcome:** Confirmed and exceeded. Average S precision jumped from **59.6% → 75.93%** (+16.3%) and F precision from **55.8% → 73.90%** (+18.1%). F F1 exceeded expectations, reaching **73.54%**.
+* **Overall Accuracy:** Increased from **96.16% ± 0.25% → 97.24% ± 0.19%** (+1.08% absolute gain).
+* **Macro-F1 Score:** Increased from **80.47% ± 0.72% → 83.85% ± 1.36%** (+3.38% absolute gain).
+
+#### 3-Seed Comparison Table: Heavy SMOTE vs. Lighter SMOTE
+| Metric | Baseline Enhanced ($S=25\text{k}, F=20\text{k}$) | Lighter SMOTE Ablation ($S=8\text{k}, F=6\text{k}$) | Net Impact / Clinical Value |
+| :--- | :---: | :---: | :--- |
+| **Overall Accuracy** | 96.16% ± 0.25% | **97.24% ± 0.19%** | **+1.08%** (Tighter $\sigma=0.19\%$) |
+| **Macro-F1 Score** | 80.47% ± 0.72% | **83.85% ± 1.36%** | **+3.38%** higher harmonic balance |
+| **Normal (N) Recall** | 96.89% ± 0.35% | **98.57% ± 0.18%** | **+1.68%** (Far fewer false positives) |
+| **Supraventricular (S) Precision** | ~59.56% | **75.93% ± 4.29%** | 🚀 **+16.37%** (Massive false alarm reduction) |
+| **Supraventricular (S) Recall** | 80.04% ± 1.69% | **66.43% ± 0.89%** | -13.61% (Controlled trade-off) |
+| **Supraventricular (S) F1** | ~67.8% | **70.78% ± 1.36%** | **+2.98%** net improvement |
+| **Ventricular (V) Recall** | 94.70% ± 0.09% | **95.15% ± 0.56%** | **+0.45%** (Consistent high detection) |
+| **Ventricular (V) F1** | ~93.0% | **92.47% ± 0.13%** | Unchanged high reliability |
+| **Fusion (F) Precision** | ~55.79% | **73.90% ± 6.29%** | 🚀 **+18.11%** |
+| **Fusion (F) Recall** | 84.47% ± 2.32% | **73.33% ± 2.12%** | -11.14% (Trade-off for precision) |
+| **Fusion (F) F1** | ~67.0% | **73.54% ± 4.14%** | **+6.54%** net improvement |
+| **Normal False Alarms (Seed 42)** | 477 false alarms | **259 false alarms** | **-45.7%** reduction in nuisance alerts |
+
+#### Per-Seed Confusion Matrices (Lighter SMOTE, ~20,141 Test Beats/Seed)
+```
+--- Seed 42 (Acc: 97.26%, F1: 84.12%) ---       --- Seed 123 (Acc: 97.00%, F1: 82.06%) ---      --- Seed 999 (Acc: 97.46%, F1: 85.36%) ---
+        Pred N  Pred S  Pred V  Pred F                  Pred N  Pred S  Pred V  Pred F                  Pred N  Pred S  Pred V  Pred F
+True N:  17764     114     119      26          True N:  17725     153     109      36          True N:  17805      79     118      21
+True S:    164     370      22       0          True S:    160     375      15       6          True S:    165     363      28       0
+True V:     47       6    1340       9          True V:     59       1    1323      19          True V:     49       4    1339      10
+True F:     30       0      14     116          True F:     37       0       9     114          True F:     24       0      14     122
+```
+
+> [!TIP]
+> **FPGA Deployment Recommendation:** Checkpoints from **Seed 42** (Val F1 85.58%) and **Seed 999** (Test Acc 97.46%, Test F1 85.36%, S Prec 81.39%, F Prec 79.74%) represent the highest-quality candidate models. Their weights are serialized in `lighter_smote_seed42_weights.npz` and `lighter_smote_seed999_weights.npz` for 8-bit Q1.7 quantization.
 
 ---
 
