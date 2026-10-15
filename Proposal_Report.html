@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: "Times New Roman", Times, serif; font-size: 14pt; text-align: center; line-height: 1.5; margin: 40px; }
+        .page-break { page-break-before: always; }
+        .red-line { border-top: 3px double #8B0000; margin: 10px 0; }
+        .header-text { font-size: 12pt; text-align: center; margin-bottom: 5px; text-transform: uppercase; }
+        .footer-table { width: 100%; font-size: 11pt; margin-top: 10px; }
+        .footer-table td { border: none; padding: 0; }
+        .title-text { font-size: 16pt; font-weight: bold; margin: 20px 0; }
+        .normal-text { font-size: 14pt; margin: 10px 0; }
+        .student-table { width: 60%; margin: 20px auto; border-collapse: collapse; }
+        .student-table th, .student-table td { border: 1px solid black; padding: 8px; text-align: center; }
+        
+        .content-section { text-align: left; text-justify: inter-word; font-size: 12pt; margin: 0 40px; }
+        .content-section h1 { font-size: 16pt; font-weight: bold; text-align: center; margin-top: 30px; text-transform: uppercase; }
+        .content-section h2 { font-size: 14pt; font-weight: bold; margin-top: 20px; }
+        .content-section p { margin-bottom: 15px; text-align: justify; }
+        .content-section ul { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <!-- PAGE 1: TITLE PAGE -->
+    <div class="header-text">PROJECT BASED EXPERIENTAL LEARNING REPORT</div>
+    <div class="red-line"></div>
+    
+    <br><br>
+    
+    <div class="title-text">PROJECT BASED EXPERIENTIAL LEARNING REPORT<br>ON</div>
+    <div class="title-text">"CardioSpike-FPGA: A Multiplier-Free Spiking Neural Network for On-Device ECG Arrhythmia Classification"</div>
+    
+    <div class="normal-text" style="font-weight: bold;">Under the Course<br>PROJECT BASED EXPERIENTIAL LEARNING</div>
+    
+    <div class="normal-text" style="font-weight: bold; margin-top: 20px;">SUBMITTED BY</div>
+    <table class="student-table">
+        <tr><th>PRN</th><th>NAME OF STUDENT</th></tr>
+        <tr><td>1022512034</td><td>Ketan Shinde</td></tr>
+        <tr><td>1022411089</td><td>Rikhil Vaswami</td></tr>
+    </table>
+    
+    <div class="normal-text">2026-27</div>
+    <div class="normal-text">THIRD Year Electronics and Communication Engineering (TY ECE)</div>
+    <div class="normal-text">Division: A , Semester - I</div>
+    
+    <div class="normal-text" style="margin-top: 20px;">Under the Guidance Of<br><b>Dr. Deepali Newaskar</b></div>
+    
+    <div class="normal-text" style="margin-top: 30px;">
+        Department of Electronics and Communication Engineering (AIML)<br>
+        School of Engineering and Technology<br>
+        DES Pune University, Pune.<br>
+        2026-2027
+    </div>
+    
+    <div class="normal-text" style="font-weight: bold; margin-top: 20px;">
+        Program: B. Tech Electronics and Communication Engineering<br>
+        School of Engineering and Technology<br>
+        DES Pune University, Pune
+    </div>
+    
+    <br><br>
+    <div class="red-line"></div>
+    <table class="footer-table">
+        <tr><td style="text-align: left;">DES Pune University, Pune.</td><td style="text-align: right;">Page 1</td></tr>
+    </table>
+
+    <!-- PAGE 2: ABSTRACT -->
+    <div class="page-break"></div>
+    <div class="header-text">PROJECT BASED EXPERIENTAL LEARNING REPORT</div>
+    <div class="red-line"></div>
+    
+    <div class="content-section">
+        <h1>ABSTRACT</h1>
+        <p>Cardiac arrhythmias represent one of the leading causes of sudden cardiac death globally, necessitating continuous monitoring solutions. While wearable ECG devices exist, they typically rely on cloud processing or power-hungry embedded processors, rendering true on-device, real-time edge classification a significant engineering challenge. This project, CardioSpike-FPGA, proposes a fully digital, multiplier-free Spiking Neural Network (SNN) deployed on a standard Field-Programmable Gate Array (FPGA) for real-time arrhythmia classification.</p>
+        <p>By leveraging the biological principles of Leaky Integrate-and-Fire (LIF) neurons and probabilistic rate coding, the architecture eliminates the need for hardware DSP multipliers by utilizing mathematically optimized bit-shift leak mechanisms. The network (topology 128 &rarr; 16 &rarr; 16 &rarr; 5) is trained offline using Surrogate Gradient Learning on the MIT-BIH Arrhythmia Database, mapping heartbeats to the 5 standard AAMI classes (N, S, V, F, Q). The resulting Q8.8 quantized fixed-point weights are hardcoded into FPGA Block RAM (BRAM), managed by a time-multiplexed Finite State Machine (FSM) that sequentially processes neurons to minimize Logic Look-Up Table (LUT) consumption. The proposed system aims to deliver highly competitive diagnostic accuracy while dramatically reducing power consumption compared to conventional Convolutional Neural Networks (CNNs), demonstrating a viable path forward for secure, battery-operated, extreme-edge medical wearables.</p>
+    </div>
+
+    <!-- PAGE 3: CONTENT -->
+    <div class="page-break"></div>
+    <div class="header-text">PROJECT BASED EXPERIENTAL LEARNING REPORT</div>
+    <div class="red-line"></div>
+    
+    <div class="content-section">
+        <h2 style="text-align: center; text-transform: uppercase;">1. Introduction</h2>
+        <p>Cardiac arrhythmias are abnormal heart rhythms that represent one of the leading causes of sudden cardiac death and hospitalization globally. Early and continuous detection of arrhythmias can significantly improve patient outcomes, particularly for high-risk individuals who require round-the-clock cardiac monitoring outside of a clinical setting.</p>
+        <p>Traditional clinical ECG monitors are large, power-hungry devices confined to hospital environments. While wearable ECG devices exist, most rely on sending raw data to a cloud server or smartphone for processing, introducing latency and dependence on wireless connectivity. True on-device, real-time arrhythmia classification — where the computation happens directly on a low-power chip worn by the patient — remains a largely unsolved engineering challenge.</p>
+        <p>Spiking Neural Networks (SNNs) offer a biologically inspired computational paradigm ideally suited for this challenge. Unlike standard Artificial Neural Networks (ANNs), SNNs process information as discrete binary spike events. Because a spike is simply a 1 or a 0, multiplications are replaced by conditional additions — a property that maps directly and efficiently onto digital hardware fabric such as FPGAs.</p>
+        <p>This project, CardioSpike-FPGA, proposes the design and implementation of a fully digital, multiplier-free SNN-based ECG classifier on a standard commodity FPGA. The entire inference pipeline — from raw ECG input to arrhythmia class output — runs on the FPGA chip with zero dependence on an external processor or cloud.</p>
+
+        <h2 style="text-align: center; text-transform: uppercase;">2. Problem Statement</h2>
+        <p>Current state-of-the-art approaches to on-device ECG classification face several critical limitations:</p>
+        <ul>
+            <li><b>Excessive Power Consumption:</b> Recent high-accuracy neural network implementations consume upward of 330 milliwatts of power, draining wearable batteries in hours.</li>
+            <li><b>Reliance on SoC-Class Hardware:</b> Several FPGA implementations require expensive, power-heavy System-on-Chip (SoC) platforms with embedded ARM Cortex processors.</li>
+            <li><b>Hardware Multiplier Dependency:</b> Many "SNN-based" works rely on hybrid ANN-SNN architectures that still require power-hungry DSP slices on the FPGA.</li>
+            <li><b>Complex Pre-Processing Overhead:</b> Certain implementations require real-time computation of mathematical derivatives in hardware, adding latency and logic gates.</li>
+        </ul>
+        <p>CardioSpike-FPGA addresses all four of these limitations simultaneously through a carefully co-designed software training pipeline and multiplier-free hardware architecture.</p>
+
+        <h2 style="text-align: center; text-transform: uppercase;">3. Objectives</h2>
+        <ul>
+            <li>To design a 3-layer Leaky Integrate-and-Fire (LIF) Spiking Neural Network (128 &rarr; 16 &rarr; 16 &rarr; 5), trained on the MIT-BIH Database to classify the five AAMI heartbeat categories.</li>
+            <li>To implement a hardware-aware training pipeline that enforces a membrane leak rate of exactly &beta; = 0.9375, guaranteeing that the LIF update reduces to a single arithmetic right-shift operation (>> 4), eliminating multipliers.</li>
+            <li>To quantize all trained network weights to fixed-point format, enabling storage of all weights within a single Block RAM (BRAM) tile.</li>
+            <li>To implement the complete SNN inference engine in VHDL, synthesizable on standard FPGAs, utilizing zero DSP slices.</li>
+            <li>To validate the hardware implementation against the software model, confirming classification correctness and measuring FPGA resource utilization.</li>
+        </ul>
+
+        <h2 style="text-align: center; text-transform: uppercase;">4. Brief Literature Review</h2>
+        <p>The field of on-device neural ECG classification has grown significantly. The following works define the benchmark for this project:</p>
+        <ul>
+            <li><b>Scrugli et al. (IEEE Sensors 2026):</b> Implements an SNN on a low-power Lattice FPGA using delta-modulation spike encoding. While highly power-efficient, it requires real-time derivative computation. CardioSpike-FPGA eliminates this pre-processing overhead by using direct-amplitude LFSR rate coding.</li>
+            <li><b>Cao et al. (IEEE TVLSI 2026):</b> Achieves 99.5% accuracy using an Inception-ResNeXt CNN on FPGA. However, it relies heavily on DSP multipliers. CardioSpike-FPGA trades a small margin of accuracy to completely eliminate DSP usage.</li>
+            <li><b>Kachuee et al. (IEEE ICHI 2018):</b> Established the standardized 5-class AAMI mapping dataset extraction pipeline on MIT-BIH that serves as the benchmark dataset for all subsequent deep learning research.</li>
+            <li><b>Neftci et al. (IEEE SPM 2019):</b> Introduced Surrogate Gradient Learning, forming the mathematical foundation that allows the SNN in this project to be trained using backpropagation through time.</li>
+        </ul>
+
+        <h2 style="text-align: center; text-transform: uppercase;">5. Proposed Methodology</h2>
+        <p><b>Dataset & Pre-processing:</b> The MIT-BIH Arrhythmia Database is utilized. R-peak locations are extracted, and a 128-sample window (355 ms) is centered on each peak. Windows are min-max normalized to a [0,1] range and mapped to 5 AAMI classes. Data augmentation (noise, shift, scaling) corrects severe class imbalances.</p>
+        <p><b>Network Architecture & Training:</b> A 128 &rarr; 16 &rarr; 16 &rarr; 5 dense architecture is trained in Python using snnTorch (Surrogate Gradients, BPTT over 16 timesteps). The network utilizes zero-reset LIF neurons with a hardware-friendly leak rate.</p>
+        <p><b>Hardware Design (VHDL):</b> The inference engine is designed as a time-multiplexed Finite State Machine (FSM). An 8-bit LFSR generates random thresholds for rate-coding the normalized inputs into spikes. A sequential multiplier-free MAC unit (conditional addition + bit-shift leak) processes the hidden layers, and an Argmax combinational circuit determines the final diagnosis.</p>
+
+        <h2 style="text-align: center; text-transform: uppercase;">6. Applications</h2>
+        <ul>
+            <li><b>Wearable Cardiac Patches:</b> The ultra-low power budget enables weeks of continuous ambulatory ECG monitoring on a coin-cell battery.</li>
+            <li><b>Remote Patient Monitoring:</b> Eliminates cloud data transmission, making cardiac monitoring accessible in low-resource or rural settings.</li>
+            <li><b>Secure Defense & Aerospace:</b> Hardware-isolated inference provides extreme reliability and security against cyber threats for high-value personnel.</li>
+        </ul>
+
+        <h2 style="text-align: center; text-transform: uppercase;">7. References</h2>
+        <ol>
+            <li>M. A. Scrugli et al., "All-Spiking ECG Analysis for Arrhythmia Classification on Low-Power FPGA," IEEE Sensors Journal, 2026.</li>
+            <li>E. O. Neftci, H. Mostafa, F. Zenke, "Surrogate Gradient Learning in Spiking Neural Networks," IEEE Signal Processing Magazine, 2019.</li>
+            <li>T. Cao et al., "FPGA-Based Real-Time ECG Classification System Using Quantized Inception-ResNeXt," IEEE TVLSI, 2026.</li>
+            <li>H. Xia et al., "An Approximate Computing-Based SNN Neuron Model," IEEE TCAS-I, 2026.</li>
+            <li>H. Chu et al., "A Neuromorphic Processing System With Spike-Driven SNN Processor for Wearable ECG Classification," IEEE TBioCAS, 2022.</li>
+            <li>A. Mehrabi et al., "An Optimized Multi-Layer SNN Implementation in FPGA Without Multipliers," Elsevier, 2023.</li>
+            <li>O. Banjo, B. Ghoraani, "QCSNN: A Memory-Efficient SNN for On-Device ECG Arrhythmia Detection," IEEE COINS, 2025.</li>
+            <li>R. Mao et al., "Ultra-Energy-Efficient ECG Classification Processor with SNN Inference," IEEE TBioCAS, 2022.</li>
+            <li>E. Z. Farsa et al., "A Low-Cost High-Speed Neuromorphic Hardware Based on SNN," IEEE TCAS-II, 2019.</li>
+            <li>W. Guo et al., "Toward the Optimal Design and FPGA Implementation of SNNs," IEEE TNNLS, 2022.</li>
+            <li>H. Asgari et al., "Low-Energy and Fast SNN for Context-Dependent Learning on FPGA," IEEE TCAS-II, 2020.</li>
+            <li>D. Valencia et al., "A Generalized Hardware Architecture for Real-Time SNNs," Springer, 2023.</li>
+            <li>E. Lemaire et al., "Synaptic Activity and Hardware Footprint of SNNs in Digital Neuromorphic Systems," ACM TECS, 2022.</li>
+            <li>B. Deng et al., "Reconstruction of a Fully Paralleled Auditory SNN and FPGA Implementation," IEEE TBioCAS, 2021.</li>
+            <li>M. Kachuee et al., "ECG Heartbeat Classification: A Deep Transferable Representation," IEEE ICHI, 2018.</li>
+            <li>A. M. Shaker et al., "Generalization of CNNs for ECG Classification Using GANs," IEEE Access, 2020.</li>
+            <li>A. Sellami, H. Hwang, "A Robust Deep CNN with Batch-Weighted Loss for Heartbeat Classification," Elsevier, 2019.</li>
+            <li>H. El-Ghaish, E. Eldele, "ECGTransForm: Adaptive ECG Arrhythmia Classification," Elsevier, 2024.</li>
+            <li>K. Weimann, T. O. F. Conrad, "Transfer Learning for ECG Classification," Scientific Reports, 2021.</li>
+            <li>S. Panchapakesan et al., "SyncNN: Evaluating and Accelerating SNNs on FPGAs," IEEE ICCAD, 2020.</li>
+        </ol>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.5; margin: 40px; text-align: justify; }
+        h1 { text-align: center; text-transform: uppercase; font-size: 16pt; margin-bottom: 20px; border-bottom: 2px solid #8B0000; padding-bottom: 10px; }
+        h2 { font-size: 14pt; color: #8B0000; margin-top: 30px; border-bottom: 1px solid black; padding-bottom: 5px; }
+        ul { margin-bottom: 20px; }
+        li { margin-bottom: 10px; }
+        .filename { font-weight: bold; font-family: "Courier New", Courier, monospace; font-size: 12pt; }
+        .purpose { font-style: italic; color: #333; }
+    </style>
+</head>
+<body>
+
+    <h1>CardioSpike-FPGA: Complete Codebase Directory</h1>
+    <p style="text-align: center; font-style: italic;">A comprehensive guide to the software, hardware, and documentation files comprising the SNN-based ECG classification architecture.</p>
+
+    <h2>1. The Python Folder (Software & Training)</h2>
+    <p><em>This directory contains the offline data preprocessing and Backpropagation Through Time (BPTT) training scripts executed prior to FPGA deployment.</em></p>
+    <ul>
+        <li><span class="filename">preprocess.py</span><br>
+        <span class="purpose">Purpose:</span> Reads the raw MIT-BIH database, extracts the 128-sample windows around the R-peaks, and applies Min-Max normalization (squashing voltages to an 8-bit 0-255 range).</li>
+        
+        <li><span class="filename">augment_data.py</span><br>
+        <span class="purpose">Purpose:</span> Solves class imbalance by artificially injecting Gaussian noise and time shifts into rare disease classes (like F and Q), ensuring the neural network has sufficient data to learn minority arrhythmias.</li>
+        
+        <li><span class="filename">train_snn_sota.py / train_snn.py</span><br>
+        <span class="purpose">Purpose:</span> The core PyTorch/snnTorch training script. Builds the 128 &rarr; 16 &rarr; 16 &rarr; 5 network and utilizes Surrogate Gradients to train the binary spikes via BPTT over 16 timesteps.</li>
+        
+        <li><span class="filename">quantize_weights.py</span><br>
+        <span class="purpose">Purpose:</span> The bridge between software and hardware. Compresses heavy 32-bit floating-point weights into 8-bit fixed-point (Q1.7) format (.coe and .hex files) so they fit perfectly into the FPGA's physical Block RAM (BRAM).</li>
+    </ul>
+
+    <h2>2. The RTL Folder (VHDL Hardware)</h2>
+    <p><em>RTL (Register-Transfer Level) contains the synthesizable VHDL code that dictates the physical logic gates on the FPGA chip.</em></p>
+    <ul>
+        <li><span class="filename">snn_pkg.vhd</span> (The Package File)<br>
+        <span class="purpose">Purpose:</span> A global configuration file defining system-wide constants (e.g., NUM_TIMESTEPS = 16) and storing the hardcoded, quantized weight arrays exported from Python.</li>
+        
+        <li><span class="filename">lfsr_8bit.vhd</span><br>
+        <span class="purpose">Purpose:</span> The 8-bit Linear-Feedback Shift Register. This acts as the "Rate Encoder," generating pseudo-random thresholds to convert 8-bit ECG continuous signals into 1-bit binary spike streams without using multipliers.</li>
+        
+        <li><span class="filename">lif_neuron.vhd</span><br>
+        <span class="purpose">Purpose:</span> The physical Leaky Integrate-and-Fire neuron module. Contains the digital logic to accumulate incoming weights, apply a multiplier-free bit-shift leak (&beta; = 0.9375 via &gt;&gt; 4), and trigger a Zero-Reset upon firing.</li>
+        
+        <li><span class="filename">argmax_5.vhd</span><br>
+        <span class="purpose">Purpose:</span> A pure combinational logic circuit that evaluates the 5 output neuron counters at the end of the inference cycle, outputting a 3-bit classification code for the winning arrhythmia class.</li>
+        
+        <li><span class="filename">snn_top.vhd</span><br>
+        <span class="purpose">Purpose:</span> The Top-Level Controller Finite State Machine (FSM). It instantiates the LFSR, Neurons, and Argmax, wiring them together and managing the sequential Time-Multiplexing process across the 16 timesteps.</li>
+        
+        <li><span class="filename">snn_top_tb.vhd</span> (The Testbench)<br>
+        <span class="purpose">Purpose:</span> A simulation environment. Feeds synthetic ECG vectors into the top-level VHDL module to verify correct hardware behavior and timing closure before physical synthesis.</li>
+    </ul>
+
+    <h2>3. The Documentation (Root Folder)</h2>
+    <p><em>The formal academic and professional documentation backing the project architecture.</em></p>
+    <ul>
+        <li><span class="filename">Proposal_Report.pdf</span><br>
+        <span class="purpose">Purpose:</span> The formal PBEL pitch formatting the project's objectives, problem statement, and methodology.</li>
+        
+        <li><span class="filename">PBEL_Logbook.pdf</span><br>
+        <span class="purpose">Purpose:</span> The 4-week structured timeline proving incremental academic progress.</li>
+        
+        <li><span class="filename">Literature_Review_Detailed.pdf</span><br>
+        <span class="purpose">Purpose:</span> Maps 20 IEEE/Springer benchmark papers directly to the architectural decisions (such as the bit-shift leak and LFSR rate coding).</li>
+        
+        <li><span class="filename">defense_cheat_sheet.md</span><br>
+        <span class="purpose">Purpose:</span> An end-to-end master study guide explaining the theoretical "Why" behind the mathematical and hardware tradeoffs.</li>
+    </ul>
+
+</body>
+</html>

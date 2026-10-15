@@ -74,3 +74,9 @@ project_*/
 *.sim_*/
 *.hbs
 *.xpr
+
+# Large Raw Datasets and Intermediate Cache
+data_ds/
+mit-bih-arrhythmia-database-1.0.0-*/
+mitbih_sparrow_4class_128.npz
+docs
