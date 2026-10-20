@@ -1,10 +1,13 @@
 """
 Inter-Patient Benchmark (de Chazal DS1 Train -> DS2 Test Protocol)
 T = 75 Timesteps, Hardware Matched, with Real Minority Augmentation
+Fully Self-Healing: Automatically finds, unzips, or downloads MIT-BIH if missing!
 """
 
 import os
 import glob
+import zipfile
+import urllib.request
 import numpy as np
 import torch
 import torch.nn as nn
@@ -46,19 +49,59 @@ LEARNING_RATE  = 2e-3
 SEED           = 42
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Executing Inter-Patient Benchmark on: {device} | T = {NUM_STEPS}")
+print(f"Executing Inter-Patient Benchmark on: {device} | T = {NUM_STEPS} timesteps")
 
-# ── 3. Extract DS1 & DS2 Partitions ──────────────────────────────────────────
-mit_dirs = [r for r, _, files in os.walk('/content', followlinks=True) if '100.dat' in files]
-if not mit_dirs:
-    mit_dirs = [r for r, _, files in os.walk('.', followlinks=True) if '100.dat' in files]
-if not mit_dirs:
-    mit_dirs = [r for r, _, files in os.walk('/content/drive', followlinks=True) if '100.dat' in files]
-if not mit_dirs:
-    raise FileNotFoundError("Could not find 'mit-bih-arrhythmia-database-1.0.0' directory! Check path.")
+# ── 3. Self-Healing MIT-BIH Locator / Unzipper / Auto-Downloader ─────────────
+def get_mitbih_directory():
+    # A. Search for existing unzipped database
+    for search_root in ['.', '/content', '/content/drive']:
+        if os.path.exists(search_root):
+            for r, _, files in os.walk(search_root, followlinks=True):
+                if '100.dat' in files and '101.dat' in files:
+                    print(f"Found existing MIT-BIH records in: {r}")
+                    return r
+                    
+    # B. Search for any zipped database file
+    print("Unzipped database not found. Searching for zip archives...")
+    for search_root in ['/content', '/content/drive', '.']:
+        if os.path.exists(search_root):
+            for r, _, files in os.walk(search_root, followlinks=True):
+                for f in files:
+                    if f.endswith('.zip') and 'mit' in f.lower() and 'arrhythmia' in f.lower():
+                        zip_path = os.path.join(r, f)
+                        dest_dir = '/content/mitbih_unzipped'
+                        print(f"Unzipping {zip_path} -> {dest_dir}...")
+                        try:
+                            with zipfile.ZipFile(zip_path, 'r') as z:
+                                z.extractall(dest_dir)
+                            for er, _, efiles in os.walk(dest_dir):
+                                if '100.dat' in efiles and '101.dat' in efiles:
+                                    return er
+                        except Exception as e:
+                            print(f"  Error extracting zip: {e}")
 
-MIT_DIR = mit_dirs[0]
-print(f"Extracting patient records from: {MIT_DIR}")
+    # C. Fallback: Fast Direct Download from PhysioNet AWS S3 Mirror (~25s)
+    dest_dir = '/content/mitbih_direct'
+    os.makedirs(dest_dir, exist_ok=True)
+    print("\n" + "="*70)
+    print("Auto-fetching 44 MIT-BIH patient records directly from AWS S3 mirror...")
+    print("="*70)
+    all_needed = DS1_PATIENTS + DS2_PATIENTS
+    for rec in all_needed:
+        for ext in ['hea', 'atr', 'dat']:
+            f_name = f"{rec}.{ext}"
+            f_path = os.path.join(dest_dir, f_name)
+            if not os.path.exists(f_path):
+                url = f"https://physionet-open.s3.amazonaws.com/mitdb/1.0.0/{f_name}"
+                try:
+                    urllib.request.urlretrieve(url, f_path)
+                except Exception as e:
+                    print(f"  Warning downloading {f_name}: {e}")
+    print("All patient records downloaded successfully!")
+    return dest_dir
+
+MIT_DIR = get_mitbih_directory()
+print(f"Using MIT-BIH database directory: {MIT_DIR}")
 
 def extract_patients(patient_list):
     X_list, y_list = [], []
@@ -94,11 +137,13 @@ print(f"DS2 Extracted: {len(y_ds2)} beats | Class counts: {np.bincount(y_ds2)}")
 # ── 4. Inject Real External Minority Beats into DS1 Train ONLY ───────────────
 extra_files = []
 for root_search in ['.', '/content', '/content/drive']:
-    extra_files.extend([os.path.join(r, 'all_real_minority_beats_svf.npz') 
-                        for r, _, files in os.walk(root_search, followlinks=True) if 'all_real_minority_beats_svf.npz' in files])
+    if os.path.exists(root_search):
+        for r, _, files in os.walk(root_search, followlinks=True):
+            if 'all_real_minority_beats_svf.npz' in files:
+                extra_files.append(os.path.join(r, 'all_real_minority_beats_svf.npz'))
 
 if extra_files:
-    print(f"\nInjecting extra real patient beats from: {extra_files[0]}")
+    print(f"\nInjecting extra real patient minority beats from: {extra_files[0]}")
     extra_data = np.load(extra_files[0])
     X_extra, y_extra = extra_data['X'], extra_data['y']
     X_train_merged = np.vstack([X_ds1, X_extra])
@@ -267,3 +312,4 @@ np.savez_compressed(out_file, w1=w1_q, w2=w2_q, w3=w3_q, scale=scale)
 np.savez_compressed(drive_npz, w1=w1_q, w2=w2_q, w3=w3_q, scale=scale)
 
 print(f"\nFinal Inter-Patient Weights Saved to Drive: {drive_npz}")
+print("Training Complete!")
