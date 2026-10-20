@@ -1,0 +1,29 @@
+# Test Case 068: Test Set Index #152
+# True Class: V (2) | Predicted Class: N (0)
+# Output Spike Counts [N, S, V, F]: [np.int64(13), np.int64(0), np.int64(12), np.int64(0)]
+# --- 25 Timesteps of Output Spikes (4 bits: N S V F) ---
+1000
+1010
+1000
+0010
+1000
+0010
+1000
+0010
+1000
+0010
+1000
+0010
+0000
+1010
+1000
+0010
+1000
+0010
+1000
+0010
+1000
+0010
+1000
+0010
+0000

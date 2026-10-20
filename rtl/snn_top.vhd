@@ -72,23 +72,23 @@ architecture rtl of snn_top is
     signal spikes_h2      : std_logic_vector(NUM_HIDDEN_2 - 1 downto 0) := (others => '0');
 
     ---------------------------------------------------------------------------
-    -- Membrane Potential Registers (32 neurons for H1 & H2, 5 for Output)
+    -- Membrane Potential Registers (32 neurons for H1 & H2, 4 for Output)
     ---------------------------------------------------------------------------
     signal vmem_h1  : vmem_array_32_t := (others => (others => '0'));
     signal vmem_h2  : vmem_array_32_t := (others => (others => '0'));
-    signal vmem_out : vmem_array_5_t  := (others => (others => '0'));
+    signal vmem_out : vmem_array_4_t  := (others => (others => '0'));
 
     ---------------------------------------------------------------------------
-    -- Output Spike Counters (sum spikes across all 16 timesteps)
+    -- Output Spike Counters (sum spikes across all timesteps)
     ---------------------------------------------------------------------------
-    signal spike_count_out : spike_count_5_t := (others => (others => '0'));
+    signal spike_count_out : spike_count_4_t := (others => (others => '0'));
 
     ---------------------------------------------------------------------------
     -- Processing Counters
     ---------------------------------------------------------------------------
     signal neuron_idx : unsigned(4 downto 0) := (others => '0');  -- 0..31
     signal input_idx  : unsigned(7 downto 0) := (others => '0');  -- 0..255
-    signal timestep   : unsigned(4 downto 0) := (others => '0');  -- 0..31
+    signal timestep   : unsigned(7 downto 0) := (others => '0');  -- 0..255
 
     ---------------------------------------------------------------------------
     -- Synaptic Current Accumulator
@@ -102,8 +102,9 @@ architecture rtl of snn_top is
     signal lfsr_out : std_logic_vector(7 downto 0);
 
     ---------------------------------------------------------------------------
-    -- Argmax Signals
+    -- Argmax Signals (4 classes: 00=N, 01=S, 10=V, 11=F)
     ---------------------------------------------------------------------------
+    signal argmax_raw    : std_logic_vector(1 downto 0);
     signal argmax_result : std_logic_vector(2 downto 0);
 
     ---------------------------------------------------------------------------
@@ -128,17 +129,18 @@ begin
             lfsr_out => lfsr_out
         );
 
-    -- Argmax classifier (combinational — always computes the winning class)
+    -- Argmax classifier (4-class comparator tree)
     -- Uses spike counts sign-extended to 16-bit for comparison
-    argmax_inst : entity work.argmax_5
+    argmax_inst : entity work.argmax_4
         port map (
             val_0     => signed(resize(spike_count_out(0), 16)),
             val_1     => signed(resize(spike_count_out(1), 16)),
             val_2     => signed(resize(spike_count_out(2), 16)),
             val_3     => signed(resize(spike_count_out(3), 16)),
-            val_4     => signed(resize(spike_count_out(4), 16)),
-            class_out => argmax_result
+            class_out => argmax_raw
         );
+
+    argmax_result <= "0" & argmax_raw;  -- Zero-extended to 3 bits (000..011)
 
     ---------------------------------------------------------------------------
     -- Input Loading Process (active only during S_IDLE)
@@ -386,6 +388,12 @@ begin
                     when S_DONE =>
                         done_reg <= '1';
                         busy_reg <= '0';
+                        report "SNN_HARDWARE_SPIKE_COUNTS: [" &
+                               integer'image(to_integer(spike_count_out(0))) & "," &
+                               integer'image(to_integer(spike_count_out(1))) & "," &
+                               integer'image(to_integer(spike_count_out(2))) & "," &
+                               integer'image(to_integer(spike_count_out(3))) & "] Class=" &
+                               integer'image(to_integer(unsigned(class_reg))) severity note;
                         if start = '0' then
                             state <= S_IDLE;
                         end if;

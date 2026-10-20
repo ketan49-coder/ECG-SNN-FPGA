@@ -1,0 +1,29 @@
+# Test Case 2: Normal Resting Heartbeat
+# True Class: N (0) | Predicted Class: N (0)
+# Output Spike Counts [N, S, V, F]: [np.int64(25), np.int64(0), np.int64(0), np.int64(0)]
+# --- 25 Timesteps of Output Spikes (4 bits: N S V F) ---
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
+1000
