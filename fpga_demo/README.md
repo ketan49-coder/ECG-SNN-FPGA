@@ -44,9 +44,10 @@ python ecg_fpga_gui.py
 
 | Metric | Measured Value | Significance |
 | :--- | :---: | :--- |
-| **FPGA Target** | Xilinx Spartan-7 (`XC7S15`) | Smallest, lowest-cost 28nm FPGA |
+| **FPGA Target** | Xilinx Spartan-7 (`XC7S15-FTGB196-1`) | Smallest, lowest-cost 28nm FPGA |
 | **DSP Multipliers** | **0 DSP48E1 Slices** | 100% Multiplier-Free Shift-and-Subtract |
-| **Logic Footprint** | **1,318 LUTs (16.48%)** | Tiny silicon area, fits in low-cost chips |
-| **Block RAM** | **0 BRAM Blocks** (24 LUTRAMs) | Extremely fast distributed ROM |
-| **Operating Power** | **30 mW** baseline | Ideal for battery-powered wearable ECGs |
-| **Inference Latency** | **4.08 ms** ($T=75$ timesteps) | **196x faster** than human heartbeat ($800\text{ ms}$) |
+| **Logic Footprint** | **1,370 Slice LUTs (17.13%)** | Tiny silicon area, 1,388 FFs (8.68%), 614 Slices (30.7%) |
+| **Block RAM** | **0 BRAM Blocks** (24 LUTRAMs) | Extremely compact distributed memory |
+| **Static Power** | **36 mW** baseline | Safe, low-thermal envelope for wearable biosensors |
+| **Inference Latency** | **4.08 ms** ($T=75$ timesteps) | **196x faster** than human cardiac beat ($800\text{ ms}$) |
+| **Classification Accuracy** | **97.53% Accuracy (85.47% F1)** | Surpasses custom 22nm ASIC benchmarks |

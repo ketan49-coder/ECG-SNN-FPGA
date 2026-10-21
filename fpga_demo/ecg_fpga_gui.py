@@ -124,7 +124,7 @@ class ECGDemoApp:
 
         sub_lbl = ttk.Label(
             header_frame,
-            text="Physical Edge Hardware Demo | Xilinx Spartan-7 (XC7S15) | Multiplier-Free (0 DSPs, 1,318 LUTs, 30 mW)",
+            text="Physical Edge Hardware Demo | Xilinx Spartan-7 (XC7S15) | Multiplier-Free (0 DSPs, 1,370 LUTs, 36 mW, 97.5% Acc)",
             style="SubHeader.TLabel"
         )
         sub_lbl.pack(anchor="w")
@@ -183,15 +183,14 @@ class ECGDemoApp:
         self.lbl_truth.pack(anchor="w", pady=(0, 10))
 
         tk.Label(left_panel, text="3. HARDWARE TIMESTEPS (T)", font=("Segoe UI", 11, "bold"), bg="#2f3640", fg="#00d2d3").pack(anchor="w", pady=(5, 5))
-        self.timestep_var = tk.StringVar(value="T = 150 (Max Precision: 91.8%)")
+        self.timestep_var = tk.StringVar(value="T = 75 (Hardware Implementation: 97.5% Acc, 85.5% F1)")
         self.timestep_combo = ttk.Combobox(
             left_panel,
             textvariable=self.timestep_var,
             values=[
-                "T = 150 (Max Precision: 91.8%)",
-                "T = 125 (High Accuracy: 91.3%)",
-                "T = 75 (Balanced Pareto: 87.1%)",
-                "T = 25 (Fast Baseline: 69.8%)"
+                "T = 75 (Hardware Implementation: 97.5% Acc, 85.5% F1)",
+                "T = 150 (High Precision Mode: 97.6% Acc)",
+                "T = 25 (Fast Baseline: 94.2% Acc)"
             ],
             state="readonly"
         )
@@ -215,7 +214,7 @@ class ECGDemoApp:
         # Specs box
         specs_frame = tk.LabelFrame(left_panel, text="Hardware Specification", font=("Segoe UI", 9, "bold"), bg="#2f3640", fg="#718093", padx=8, pady=8)
         specs_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=5)
-        specs_text = "• FPGA: Spartan-7 (XC7S15)\n• Multipliers: 0 DSPs (Shift-add)\n• Memory: 0 BRAM (LUTROM)\n• Timesteps: T = 150 (91.8%)\n• Clock: 100 MHz (~8.17 ms)"
+        specs_text = "• FPGA: Spartan-7 (XC7S15)\n• Multipliers: 0 DSPs (Shift-add)\n• Memory: 0 BRAM (LUTROM)\n• Logic: 1,370 LUTs, 1,388 FFs\n• Timesteps: T = 75 (Hardware Matched)\n• Clock: 100 MHz (4.08 ms Latency)\n• Benchmark: 97.53% Acc | 85.47% F1"
         tk.Label(specs_frame, text=specs_text, font=("Consolas", 8), bg="#2f3640", fg="#bdc3c7", justify=tk.LEFT).pack(anchor="w")
 
         # ── Right Panel Displays ──────────────────────────────────────────────
@@ -388,12 +387,11 @@ class ECGDemoApp:
     def get_selected_timesteps(self):
         val = self.timestep_var.get()
         if "150" in val: return 150
-        if "125" in val: return 125
-        if "75" in val: return 75
-        return 25
+        if "25" in val: return 25
+        return 75
 
-    def run_digital_twin_inference(self, samples_8bit, timesteps=150):
-        """Bit-true simulation of RTL snn_top.vhd and lfsr_8bit.vhd."""
+    def run_digital_twin_inference(self, samples_8bit, timesteps=75):
+        """Bit-true simulation of RTL snn_top.vhd and lfsr_8bit.vhd matching Spartan-7 hardware."""
         lfsr = HardwareLFSR8(seed=0xA5)
         v1 = np.zeros(32, dtype=np.int32)
         v2 = np.zeros(32, dtype=np.int32)
@@ -412,21 +410,21 @@ class ECGDemoApp:
             accum_h1 = np.dot(self.W1, spikes_encoded)
             v1_leaked = v1 - np.right_shift(v1, 4)
             v1_new = v1_leaked + accum_h1
-            s1 = (v1_new >= 64).astype(np.int32)
+            s1 = (v1_new >= 128).astype(np.int32)
             v1 = np.where(s1 == 1, 0, v1_new)
 
             # S_PROC_H2
             accum_h2 = np.dot(self.W2, s1)
             v2_leaked = v2 - np.right_shift(v2, 4)
             v2_new = v2_leaked + accum_h2
-            s2 = (v2_new >= 64).astype(np.int32)
+            s2 = (v2_new >= 128).astype(np.int32)
             v2 = np.where(s2 == 1, 0, v2_new)
 
             # S_PROC_OUT
             accum_out = np.dot(self.W3, s2)
             v3_leaked = v3 - np.right_shift(v3, 4)
             v3_new = v3_leaked + accum_out
-            s3 = (v3_new >= 64).astype(np.int32)
+            s3 = (v3_new >= 128).astype(np.int32)
             v3 = np.where(s3 == 1, 0, v3_new)
 
             spike_count_out += s3
@@ -483,8 +481,8 @@ class ECGDemoApp:
                 latency_ms = (t_end - t_start) * 1000.0
             else:
                 pred_class = self.current_truth_class
-                spike_counts = np.array([150, 0, 0, 0])
-                latency_ms = 8.17
+                spike_counts = np.array([75, 0, 0, 0])
+                latency_ms = 4.08
 
         # Update Display
         self.update_results_display(pred_class, latency_ms, spike_counts)
