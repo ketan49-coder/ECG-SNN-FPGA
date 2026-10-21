@@ -1,7 +1,31 @@
+import os
 import numpy as np
 
-w = np.load('weights.npz')
-W1, W2, W3 = w['W1'], w['W2'], w['W3']
+# Resolve project root regardless of where the command is executed from
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if os.path.exists(os.path.join(script_dir, 'rtl')):
+    ROOT_DIR = script_dir
+elif os.path.exists(os.path.join(script_dir, '..', 'rtl')):
+    ROOT_DIR = os.path.abspath(os.path.join(script_dir, '..'))
+else:
+    ROOT_DIR = os.getcwd()
+
+# Find weights file
+weights_path = os.path.join(ROOT_DIR, 'weights.npz')
+if not os.path.exists(weights_path):
+    # Check in parent or checkpoints
+    for alt in [os.path.join(ROOT_DIR, 'best_real_data_t75_seed123_weights.npz'),
+                os.path.join(ROOT_DIR, 'checkpoints', 'lighter_smote_seed123_weights.npz')]:
+        if os.path.exists(alt):
+            weights_path = alt
+            break
+
+print(f"Loading weights from: {weights_path}")
+w = np.load(weights_path)
+W1 = w['W1'] if 'W1' in w else w['w1']
+W2 = w['W2'] if 'W2' in w else w['w2']
+W3 = w['W3'] if 'W3' in w else w['w3']
+
 w1_flat = W1.flatten()
 w2_flat = W2.flatten()
 w3_flat = W3.flatten()
@@ -85,8 +109,17 @@ end package snn_pkg;
 
 vhdl_pkg = header + format_1d(w1_flat) + mid1 + format_1d(w2_flat) + mid2 + format_1d(w3_flat) + footer
 
-for path in ['snn_pkg.vhd', 'rtl/snn_pkg.vhd', 'SNN-FPGA-ECG/SNN-FPGA-ECG.srcs/sources_1/imports/rtl/snn_pkg.vhd']:
-    with open(path, 'w') as f:
-        f.write(vhdl_pkg)
+target_paths = [
+    os.path.join(ROOT_DIR, 'snn_pkg.vhd'),
+    os.path.join(ROOT_DIR, 'rtl', 'snn_pkg.vhd'),
+    os.path.join(ROOT_DIR, 'SNN-FPGA-ECG', 'SNN-FPGA-ECG.srcs', 'sources_1', 'imports', 'rtl', 'snn_pkg.vhd')
+]
 
-print("Generated and updated snn_pkg.vhd everywhere!")
+for path in target_paths:
+    dir_name = os.path.dirname(path)
+    if os.path.exists(dir_name):
+        with open(path, 'w') as f:
+            f.write(vhdl_pkg)
+        print(f"Updated: {path}")
+
+print("\nSUCCESS: All snn_pkg.vhd files updated successfully!")
